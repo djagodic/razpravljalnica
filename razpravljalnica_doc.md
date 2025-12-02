@@ -13,7 +13,7 @@ razpravljalnica/
 ├─ pkg/
 │  ├─ api/               # generated pb.go files live here (go package)
 │  ├─ server/            # server logic, in-memory storage, replication
-│  ├─ control/           # control plane (monitoring, node management)
+│  ├─ control/           # control plane (monitoring, node management) -> moved into server
 │  ├─ client/            # client helper library (wrappers)
 │  └─ common/            # common helpers, types, utils
 ├─ test/

@@ -1,0 +1,31 @@
+✔️ Prvi odgovor:
+1. Uvod + jasna arhitektura
+2. Pravilna struktura direktorijev
+3. proto/razpravljalnica.proto (popolna verzija)
+4. go.mod
+5. Navodila za generiranje GRPC kode
+✔️ Naslednji odgovor (ko rečeš “nadaljuj”):
+6. pkg/common — utility funkcije
+7. pkg/server/model.go — podatkovni modeli
+8. pkg/server/storage.go — thread-safe storage
+9. pkg/server/log.go — replication log
+10. pkg/server/snapshot.go — snapshot sistem
+11. pkg/server/node.go — podatki o node-u
+✔️ Tretji odgovor:
+12. pkg/server/replication.go — chain replication engine
+13. pkg/server/board.go — implementacija MessageBoard RPC-jev
+14. pkg/server/control.go — implementacija ControlPlane RPC-jev
+15. pkg/server/server.go — zagonska logika strežnika
+16. cmd/server/main.go — CLI strežnika
+✔️ Četrti odgovor:
+17. pkg/client/client.go — Go client library
+18. cmd/client/main.go — polni CLI odjemalec
+19. test/server_test.go
+20. Končna struktura direktorija
+
+
+Jaka, jaz sem se malo poigral s Chatom, nisem še nič poganjal zato ne vem kaj in koliko dela.
+Če ne drugega imava ogrodje in ideje iz katerih lahko gradiva naprej. Naslednji korak od tule
+bi bil tole: posodobitev strežnika, da bo popolnoma robusten za odpovedi vozlišč, samodejno reconfig verige in snapshot + replay
+
+Zaenkrat sem se ustavil, bova najprej do tule porihtala da bo vse delalo in se potem še malo igrala dalje
