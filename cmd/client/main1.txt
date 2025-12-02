@@ -1,0 +1,38 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	api "github.com/djagodic/razpravljalnica/pkg/api"
+	"google.golang.org/grpc"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("usage: client <server:port>")
+		return
+	}
+	addr := os.Args[1]
+
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("failed connect: %v", err)
+	}
+	defer conn.Close()
+	client := api.NewMessageBoardClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	u, _ := client.CreateUser(ctx, &api.CreateUserRequest{Name: "David"})
+	t, _ := client.CreateTopic(ctx, &api.CreateTopicRequest{Name: "Tema1"})
+	m, _ := client.PostMessage(ctx, &api.PostMessageRequest{TopicId: t.Id, UserId: u.Id, Text: "Pozdrav!"})
+
+	fmt.Println("User:", u.Id, u.Name)
+	fmt.Println("Topic:", t.Id, t.Name)
+	fmt.Println("Message:", m.Id, m.Text)
+}
