@@ -10,6 +10,7 @@ import (
 	api "github.com/djagodic/razpravljalnica/pkg/api"
 	"github.com/djagodic/razpravljalnica/pkg/control"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/djagodic/razpravljalnica/pkg/common"
 )
 
 type MessageBoardServer struct {
@@ -49,7 +50,7 @@ func (s *MessageBoardServer) nextSequence() int64 {
 
 func (s *MessageBoardServer) CreateUser(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
 	user := &User{
-		ID:   GenID("user"),
+		ID:   common.GenID("user"),
 		Name: req.Name,
 	}
 	s.storage.AddUser(user)
@@ -73,7 +74,7 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *api.CreateUser
 
 func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *api.CreateTopicRequest) (*api.Topic, error) {
 	topic := &Topic{
-		ID:   GenID("topic"),
+		ID:   common.GenID("topic"),
 		Name: req.Name,
 	}
 	s.storage.AddTopic(topic)
@@ -96,7 +97,7 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *api.CreateTop
 
 func (s *MessageBoardServer) PostMessage(ctx context.Context, req *api.PostMessageRequest) (*api.Message, error) {
 	comment := &Comment{
-		ID:        GenID("msg"),
+		ID:        common.GenID("msg"),
 		TopicID:   req.TopicId,
 		UserID:    req.UserId,
 		Body:      req.Text,
