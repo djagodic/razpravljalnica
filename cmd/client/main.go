@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/yourname/razpravljalnica/pkg/api"
-	control "github.com/yourname/razpravljalnica/pkg/control"
+	api "github.com/djagodic/razpravljalnica/pkg/api"
+	control "github.com/djagodic/razpravljalnica/pkg/control"
 	"google.golang.org/grpc"
 )
 

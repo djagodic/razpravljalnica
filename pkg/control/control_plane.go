@@ -59,7 +59,7 @@ func (c *ControlPlaneServer) RegisterNode(nodeID, addr string) {
 func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	node, ok := c.nodeMap[nodeID]
+	_, ok := c.nodeMap[nodeID]
 	if !ok {
 		return
 	}
