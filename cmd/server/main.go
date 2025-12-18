@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	api "github.com/djagodic/razpravljalnica/pkg/api"
+	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"github.com/djagodic/razpravljalnica/pkg/server"
 	"google.golang.org/grpc"
 )
@@ -24,7 +24,7 @@ func main() {
 
 	s := grpc.NewServer()
 	board := server.NewMessageBoardServer(*nodeID, *isHead, *isTail)
-	api.RegisterMessageBoardServer(s, board)
+	razpravljalnica.RegisterMessageBoardServer(s, board)
 
 	log.Printf("Starting node %s at %s (head=%v, tail=%v)", *nodeID, *addr, *isHead, *isTail)
 	if err := s.Serve(lis); err != nil {

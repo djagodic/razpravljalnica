@@ -4,8 +4,6 @@ import (
 	"context"
 	"log"
 	"time"
-
-	"github.com/djagodic/razpravljalnica/pkg/control"
 )
 
 // ReplicateEntry replicates a log entry to next node in chain

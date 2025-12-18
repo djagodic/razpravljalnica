@@ -10,23 +10,24 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/djagodic/razpravljalnica/pkg/api"
-	control "github.com/djagodic/razpravljalnica/pkg/control"
+	control "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func getClusterState(controlAddr string) (*api.NodeInfo, *api.NodeInfo, error) {
-	conn, err := grpc.Dial(controlAddr, grpc.WithInsecure())
+func getClusterState(controlAddr string) (*control.NodeInfo, *control.NodeInfo, error) {
+	conn, err := grpc.NewClient(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
 	}
 	defer conn.Close()
-
 	ctrlClient := control.NewControlPlaneClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	resp, err := ctrlClient.GetClusterState(ctx, &api.Empty{})
+	resp, err := ctrlClient.GetClusterState(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -34,19 +35,19 @@ func getClusterState(controlAddr string) (*api.NodeInfo, *api.NodeInfo, error) {
 	return resp.Head, resp.Tail, nil
 }
 
-func connectToNode(address string) api.MessageBoardClient {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.ClientConn) {
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
 	}
-	return api.NewMessageBoardClient(conn)
+	return razpravljalnica.NewMessageBoardClient(conn), conn
 }
 
-func startSubscribe(userID int64, topicIDs []int64, client api.MessageBoardClient) {
+func startSubscribe(userID int64, topicIDs []int64, client razpravljalnica.MessageBoardClient) {
 	ctx := context.Background()
 
 	// pridobi token za subscription
-	subResp, err := client.GetSubcscriptionNode(ctx, &api.SubscriptionNodeRequest{
+	subResp, err := client.GetSubcscriptionNode(ctx, &razpravljalnica.SubscriptionNodeRequest{
 		UserId:  userID,
 		TopicId: topicIDs,
 	})
@@ -60,9 +61,9 @@ func startSubscribe(userID int64, topicIDs []int64, client api.MessageBoardClien
 		log.Printf("Failed to connect to subscription node: %v", err)
 		return
 	}
-	subClient := api.NewMessageBoardClient(subConn)
+	subClient := razpravljalnica.NewMessageBoardClient(subConn)
 
-	stream, err := subClient.SubscribeTopic(ctx, &api.SubscribeTopicRequest{
+	stream, err := subClient.SubscribeTopic(ctx, &razpravljalnica.SubscribeTopicRequest{
 		UserId:         userID,
 		TopicId:        topicIDs,
 		FromMessageId:  0,
@@ -88,28 +89,33 @@ func startSubscribe(userID int64, topicIDs []int64, client api.MessageBoardClien
 }
 
 func main() {
+	//kot argument ob zaganjanju povej address control_plane
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: client <control_plane_addr>")
 		return
 	}
 	controlAddr := os.Args[1]
 
+	//pridobi lokacijo head, tail
 	head, tail, err := getClusterState(controlAddr)
 	if err != nil {
 		log.Fatalf("Failed to get cluster state: %v", err)
 	}
 	fmt.Printf("Head node: %s (%s), Tail node: %s (%s)\n", head.NodeId, head.Address, tail.NodeId, tail.Address)
 
-	headClient := connectToNode(head.Address)
-	tailClient := connectToNode(tail.Address)
+	//connectaj v head in tail
+	headClient, connHead := connectToNode(head.Address)
+	tailClient, connClient := connectToNode(tail.Address)
+	defer connHead.Close()
+	defer connClient.Close()
 
 	reader := bufio.NewReader(os.Stdin)
 
-	var currentUser *api.User
+	var currentUser *razpravljalnica.User
 
 	fmt.Println("Interactive Razpravljalnica CLI")
 	fmt.Println("Commands: createuser <name>, createtopic <name>, post <topic_id> <text>, update <topic_id> <msg_id> <text>, delete <topic_id> <msg_id>, like <topic_id> <msg_id>, listtopics, listmessages <topic_id>, subscribe <topic_id1,topic_id2,...>, exit")
-
+	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
 	for {
 		fmt.Print("> ")
 		line, _ := reader.ReadString('\n')
@@ -134,7 +140,7 @@ func main() {
 				fmt.Println("Usage: createuser <name>")
 				continue
 			}
-			u, err := headClient.CreateUser(context.Background(), &api.CreateUserRequest{Name: args})
+			u, err := headClient.CreateUser(context.Background(), &razpravljalnica.CreateUserRequest{Name: args})
 			if err != nil {
 				fmt.Println("Error creating user:", err)
 				continue
@@ -147,7 +153,7 @@ func main() {
 				fmt.Println("Usage: createtopic <name>")
 				continue
 			}
-			t, err := headClient.CreateTopic(context.Background(), &api.CreateTopicRequest{Name: args})
+			t, err := headClient.CreateTopic(context.Background(), &razpravljalnica.CreateTopicRequest{Name: args})
 			if err != nil {
 				fmt.Println("Error creating topic:", err)
 				continue
@@ -166,7 +172,7 @@ func main() {
 			}
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			text := fields[1]
-			msg, err := headClient.PostMessage(context.Background(), &api.PostMessageRequest{
+			msg, err := headClient.PostMessage(context.Background(), &razpravljalnica.PostMessageRequest{
 				UserId:  currentUser.Id,
 				TopicId: topicID,
 				Text:    text,
@@ -190,7 +196,7 @@ func main() {
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
 			text := fields[2]
-			msg, err := headClient.UpdateMessage(context.Background(), &api.UpdateMessageRequest{
+			msg, err := headClient.UpdateMessage(context.Background(), &razpravljalnica.UpdateMessageRequest{
 				UserId:    currentUser.Id,
 				TopicId:   topicID,
 				MessageId: msgID,
@@ -214,7 +220,7 @@ func main() {
 			}
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
-			_, err := headClient.DeleteMessage(context.Background(), &api.DeleteMessageRequest{
+			_, err := headClient.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
 				UserId:    currentUser.Id,
 				TopicId:   topicID,
 				MessageId: msgID,
@@ -237,7 +243,7 @@ func main() {
 			}
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
-			msg, err := headClient.LikeMessage(context.Background(), &api.LikeMessageRequest{
+			msg, err := headClient.LikeMessage(context.Background(), &razpravljalnica.LikeMessageRequest{
 				UserId:    currentUser.Id,
 				TopicId:   topicID,
 				MessageId: msgID,
@@ -249,7 +255,7 @@ func main() {
 			fmt.Printf("Message liked: %d | Likes: %d\n", msg.Id, msg.Likes)
 
 		case "listtopics":
-			resp, err := tailClient.ListTopics(context.Background(), &api.Empty{})
+			resp, err := tailClient.ListTopics(context.Background(), &emptypb.Empty{})
 			if err != nil {
 				fmt.Println("Error listing topics:", err)
 				continue
@@ -260,7 +266,7 @@ func main() {
 
 		case "listmessages":
 			topicID, _ := strconv.ParseInt(args, 10, 64)
-			resp, err := tailClient.GetMessages(context.Background(), &api.GetMessagesRequest{
+			resp, err := tailClient.GetMessages(context.Background(), &razpravljalnica.GetMessagesRequest{
 				TopicId:       topicID,
 				FromMessageId: 0,
 				Limit:         100,

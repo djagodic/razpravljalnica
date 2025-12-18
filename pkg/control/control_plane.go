@@ -6,13 +6,14 @@ import (
 	"sync"
 	"time"
 
-	api "github.com/djagodic/razpravljalnica/pkg/api"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // ControlPlaneServer implements api.ControlPlane
 type ControlPlaneServer struct {
-	api.UnimplementedControlPlaneServer
+	//api.UnimplementedControlPlaneServer
 
 	mu       sync.RWMutex
 	nodes    []*NodeInfo // ordered chain: head -> ... -> tail
@@ -35,6 +36,8 @@ func NewControlPlaneServer() *ControlPlaneServer {
 		interval: 5 * time.Second, // heartbeat interval
 	}
 }
+
+//
 
 // RegisterNode adds a new node to the chain (called by node at startup)
 func (c *ControlPlaneServer) RegisterNode(nodeID, addr string) {
@@ -109,7 +112,7 @@ func (c *ControlPlaneServer) reconfigureChain(deadNodeID string) {
 }
 
 // GetClusterState returns current head and tail
-func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Empty) (*api.GetClusterStateResponse, error) {
+func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Empty) (*nadzorna_ravnina.GetClusterStateResponse, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	var head, tail NodeInfo
@@ -117,12 +120,12 @@ func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Emp
 		head = *c.nodes[0]
 		tail = *c.nodes[len(c.nodes)-1]
 	}
-	return &api.GetClusterStateResponse{
-		Head: &api.NodeInfo{
+	return &nadzorna_ravnina.GetClusterStateResponse{
+		Head: &nadzorna_ravnina.NodeInfo{
 			NodeId:  head.NodeID,
 			Address: head.Address,
 		},
-		Tail: &api.NodeInfo{
+		Tail: &nadzorna_ravnina.NodeInfo{
 			NodeId:  tail.NodeID,
 			Address: tail.Address,
 		},

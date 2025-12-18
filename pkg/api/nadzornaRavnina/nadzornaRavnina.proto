@@ -1,0 +1,27 @@
+//compile with: protoc -I=./pkg/api/nadzornaRavnina  --go_out=paths=source_relative:./pkg/api/nadzornaRavnina  --go-grpc_out=paths=source_relative:./pkg/api/nadzornaRavnina  pkg/api/nadzornaRavnina/nadzornaRavnina.proto
+
+syntax = "proto3";
+
+package controlplane;
+
+option go_package = "pkg/api/nadzorna_ravnina";
+
+import "google/protobuf/empty.proto"; 
+
+// Node information
+message NodeInfo {
+    string node_id = 1;
+    string address = 2;
+}
+
+// Response for GetClusterState
+message GetClusterStateResponse {
+    NodeInfo head = 1;
+    NodeInfo tail = 2;
+}
+
+// ControlPlane service
+service ControlPlane {
+    // Returns current head and tail of the cluster
+    rpc GetClusterState(google.protobuf.Empty) returns (GetClusterStateResponse);
+}

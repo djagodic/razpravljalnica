@@ -1,5 +1,5 @@
 // V rootu projekta
-// protoc --go_out=pkg/api --go_opt=paths=source_relative --go-grpc_out=pkg/api --go-grpc_opt=paths=source_relative proto/razpravljalnica.proto
+// protoc -I=./pkg/api/razpravljalnica  --go_out=paths=source_relative:./pkg/api/razpravljalnica  --go-grpc_out=paths=source_relative:./pkg/api/razpravljalnica  pkg/api/razpravljalnica/razpravljalnica.proto
 //
 //
 // Dobilo se bo:
@@ -10,7 +10,7 @@ syntax = "proto3";
 
 package razpravljalnica;
 
-option go_package = "/razpravljalnica";
+option go_package = "/razpravljalnica/pkg/api/razpravljalnica";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -164,18 +164,4 @@ message MessageEvent {
   OpType op = 2; // type of event
   Message message = 3;
   google.protobuf.Timestamp event_at = 4; // timestamp of the event
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Control plane
-////////////////////////////////////////////////////////////////////////////////
-
-// Return the the head and the tail node address
-service ControlPlane {
-  rpc GetClusterState(google.protobuf.Empty) returns (GetClusterStateResponse);
-}
-
-message GetClusterStateResponse {
-  NodeInfo head = 1;
-  NodeInfo tail = 2;
 }

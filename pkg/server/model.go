@@ -3,7 +3,7 @@ package server
 import (
 	"time"
 
-	"github.com/djagodic/razpravljalnica/pkg/api"
+	api "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 )
 
 // User model

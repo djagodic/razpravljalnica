@@ -7,23 +7,22 @@ import (
 	"sync/atomic"
 	"time"
 
-	api "github.com/djagodic/razpravljalnica/pkg/api"
-	"github.com/djagodic/razpravljalnica/pkg/control"
-	"google.golang.org/protobuf/types/known/emptypb"
+	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"github.com/djagodic/razpravljalnica/pkg/common"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type MessageBoardServer struct {
-	api.UnimplementedMessageBoardServer
+	razpravljalnica.UnimplementedMessageBoardServer
 
 	storage *NodeStorage
 	log     *ReplicationLog
 
 	seq int64
 
-	nodeID string
-	IsHead bool
-	IsTail bool
+	nodeID   string
+	IsHead   bool
+	IsTail   bool
 	nextNode *Node
 
 	// subscription channels: topicID -> userID -> chan *api.MessageEvent
@@ -37,7 +36,7 @@ func NewMessageBoardServer(nodeID string, isHead, isTail bool) *MessageBoardServ
 		nodeID:  nodeID,
 		IsHead:  isHead,
 		IsTail:  isTail,
-		subs:    make(map[string]map[string]chan *api.MessageEvent),
+		subs:    make(map[string]map[string]chan *razpravljalnica.MessageEvent),
 	}
 }
 
@@ -48,7 +47,7 @@ func (s *MessageBoardServer) nextSequence() int64 {
 
 // ------------------------ gRPC methods -----------------------------
 
-func (s *MessageBoardServer) CreateUser(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
+func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnica.CreateUserRequest) (*razpravljalnica.User, error) {
 	user := &User{
 		ID:   common.GenID("user"),
 		Name: req.Name,
@@ -66,13 +65,13 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *api.CreateUser
 		go s.ReplicateEntry(entry)
 	}
 
-	return &api.User{
+	return &razpravljalnica.User{
 		Id:   user.ID,
 		Name: user.Name,
 	}, nil
 }
 
-func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *api.CreateTopicRequest) (*api.Topic, error) {
+func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalnica.CreateTopicRequest) (*razpravljalnica.Topic, error) {
 	topic := &Topic{
 		ID:   common.GenID("topic"),
 		Name: req.Name,
@@ -89,13 +88,13 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *api.CreateTop
 		go s.ReplicateEntry(entry)
 	}
 
-	return &api.Topic{
+	return &razpravljalnica.Topic{
 		Id:   topic.ID,
 		Name: topic.Name,
 	}, nil
 }
 
-func (s *MessageBoardServer) PostMessage(ctx context.Context, req *api.PostMessageRequest) (*api.Message, error) {
+func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalnica.PostMessageRequest) (*razpravljalnica.Message, error) {
 	comment := &Comment{
 		ID:        common.GenID("msg"),
 		TopicID:   req.TopicId,
@@ -120,9 +119,9 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *api.PostMessa
 	}
 
 	// broadcast to local subscribers
-	go s.broadcastToSubscribers(comment, api.OpType_OP_POST)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_POST)
 
-	return &api.Message{
+	return &razpravljalnica.Message{
 		Id:        comment.ID,
 		TopicId:   comment.TopicID,
 		UserId:    comment.UserID,
@@ -133,13 +132,13 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *api.PostMessa
 }
 
 // helper
-func (s *MessageBoardServer) broadcastToSubscribers(c *Comment, op api.OpType) {
+func (s *MessageBoardServer) broadcastToSubscribers(c *Comment, op razpravljalnica.OpType) {
 	for _, userSubs := range s.subs {
 		for _, ch := range userSubs {
-			ev := &api.MessageEvent{
+			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),
 				Op:             op,
-				Message: &api.Message{
+				Message: &razpravljalnica.Message{
 					Id:        c.ID,
 					TopicId:   c.TopicID,
 					UserId:    c.UserID,
@@ -159,16 +158,15 @@ func (s *MessageBoardServer) broadcastToSubscribers(c *Comment, op api.OpType) {
 }
 
 // Helper to convert time.Time -> protobuf Timestamp
-func timestamppbNow(t time.Time) *api.Timestamp {
-	return &api.Timestamp{
+func timestamppbNow(t time.Time) *razpravljalnica.Timestamp {
+	return &razpravljalnica.Timestamp{
 		Seconds: t.Unix(),
 		Nanos:   int32(t.Nanosecond()),
 	}
 }
 
-
 // ------------------------ UpdateMessage -------------------------
-func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *api.UpdateMessageRequest) (*api.Message, error) {
+func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *api.UpdateMessageRequest) (*razpravljalnica.Message, error) {
 	comment, err := s.storage.GetComment(req.TopicId, req.MessageId)
 	if err != nil {
 		return nil, err
@@ -193,9 +191,9 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *api.UpdateM
 		go s.ReplicateEntry(entry)
 	}
 
-	go s.broadcastToSubscribers(comment, api.OpType_OP_UPDATE)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_UPDATE)
 
-	return &api.Message{
+	return &razpravljalnica.Message{
 		Id:        comment.ID,
 		TopicId:   comment.TopicID,
 		UserId:    comment.UserID,
@@ -206,7 +204,7 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *api.UpdateM
 }
 
 // ------------------------ DeleteMessage -------------------------
-func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *api.DeleteMessageRequest) (*emptypb.Empty, error) {
+func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljalnica.DeleteMessageRequest) (*emptypb.Empty, error) {
 	comment, err := s.storage.GetComment(req.TopicId, req.MessageId)
 	if err != nil {
 		return nil, err
@@ -229,13 +227,13 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *api.DeleteM
 		go s.ReplicateEntry(entry)
 	}
 
-	go s.broadcastToSubscribers(comment, api.OpType_OP_DELETE)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_DELETE)
 
 	return &emptypb.Empty{}, nil
 }
 
 // ------------------------ LikeMessage ---------------------------
-func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *api.LikeMessageRequest) (*api.Message, error) {
+func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalnica.LikeMessageRequest) (*razpravljalnica.Message, error) {
 	comment, err := s.storage.LikeComment(req.TopicId, req.MessageId)
 	if err != nil {
 		return nil, err
@@ -251,9 +249,9 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *api.LikeMessa
 		go s.ReplicateEntry(entry)
 	}
 
-	go s.broadcastToSubscribers(comment, api.OpType_OP_LIKE)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_LIKE)
 
-	return &api.Message{
+	return &razpravljalnica.Message{
 		Id:        comment.ID,
 		TopicId:   comment.TopicID,
 		UserId:    comment.UserID,
@@ -264,24 +262,24 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *api.LikeMessa
 }
 
 // ------------------------ ListTopics ----------------------------
-func (s *MessageBoardServer) ListTopics(ctx context.Context, _ *emptypb.Empty) (*api.ListTopicsResponse, error) {
+func (s *MessageBoardServer) ListTopics(ctx context.Context, _ *emptypb.Empty) (*razpravljalnica.ListTopicsResponse, error) {
 	topics := s.storage.ListTopics()
-	apiTopics := make([]*api.Topic, 0, len(topics))
+	apiTopics := make([]*razpravljalnica.Topic, 0, len(topics))
 	for _, t := range topics {
-		apiTopics = append(apiTopics, &api.Topic{
+		apiTopics = append(apiTopics, &razpravljalnica.Topic{
 			Id:   t.ID,
 			Name: t.Name,
 		})
 	}
-	return &api.ListTopicsResponse{Topics: apiTopics}, nil
+	return &razpravljalnica.ListTopicsResponse{Topics: apiTopics}, nil
 }
 
 // ------------------------ GetMessages ---------------------------
-func (s *MessageBoardServer) GetMessages(ctx context.Context, req *api.GetMessagesRequest) (*api.GetMessagesResponse, error) {
+func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalnica.GetMessagesRequest) (*razpravljalnica.GetMessagesResponse, error) {
 	messages := s.storage.GetMessages(req.TopicId, req.FromMessageId, int(req.Limit))
-	apiMessages := make([]*api.Message, 0, len(messages))
+	apiMessages := make([]*razpravljalnica.Message, 0, len(messages))
 	for _, m := range messages {
-		apiMessages = append(apiMessages, &api.Message{
+		apiMessages = append(apiMessages, &razpravljalnica.Message{
 			Id:        m.ID,
 			TopicId:   m.TopicID,
 			UserId:    m.UserID,
@@ -290,25 +288,25 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *api.GetMessag
 			Likes:     m.Likes,
 		})
 	}
-	return &api.GetMessagesResponse{Messages: apiMessages}, nil
+	return &razpravljalnica.GetMessagesResponse{Messages: apiMessages}, nil
 }
 
 // ------------------------ SubscribeTopic ------------------------
-func (s *MessageBoardServer) SubscribeTopic(req *api.SubscribeTopicRequest, stream api.MessageBoard_SubscribeTopicServer) error {
+func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicRequest, stream razpravljalnica.MessageBoard_SubscribeTopicServer) error {
 	for _, topicID := range req.TopicId {
 		if _, ok := s.subs[fmt.Sprint(topicID)]; !ok {
-			s.subs[fmt.Sprint(topicID)] = make(map[string]chan *api.MessageEvent)
+			s.subs[fmt.Sprint(topicID)] = make(map[string]chan *razpravljalnica.MessageEvent)
 		}
-		ch := make(chan *api.MessageEvent, 100)
+		ch := make(chan *razpravljalnica.MessageEvent, 100)
 		s.subs[fmt.Sprint(topicID)][fmt.Sprint(req.UserId)] = ch
 
 		// send historical messages
 		msgs := s.storage.GetMessages(topicID, req.FromMessageId, 100)
 		for _, m := range msgs {
-			ev := &api.MessageEvent{
+			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),
-				Op:             api.OpType_OP_POST,
-				Message: &api.Message{
+				Op:             razpravljalnica.OpType_OP_POST,
+				Message: &razpravljalnica.Message{
 					Id:        m.ID,
 					TopicId:   m.TopicID,
 					UserId:    m.UserID,
@@ -324,7 +322,7 @@ func (s *MessageBoardServer) SubscribeTopic(req *api.SubscribeTopicRequest, stre
 		}
 
 		// stream new messages
-		go func(ch chan *api.MessageEvent) {
+		go func(ch chan *razpravljalnica.MessageEvent) {
 			for ev := range ch {
 				if err := stream.Send(ev); err != nil {
 					return
@@ -335,4 +333,3 @@ func (s *MessageBoardServer) SubscribeTopic(req *api.SubscribeTopicRequest, stre
 	// block to keep the stream open
 	select {}
 }
-

@@ -1,5 +1,5 @@
 // V rootu projekta
-// protoc --go_out=pkg/api --go_opt=paths=source_relative --go-grpc_out=pkg/api --go-grpc_opt=paths=source_relative proto/razpravljalnica.proto
+// protoc -I=./pkg/api/razpravljalnica  --go_out=paths=source_relative:./pkg/api/razpravljalnica  --go-grpc_out=paths=source_relative:./pkg/api/razpravljalnica  pkg/api/razpravljalnica/razpravljalnica.proto
 //
 //
 // Dobilo se bo:
@@ -10,7 +10,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.2
-// source: proto/razpravljalnica.proto
+// source: razpravljalnica.proto
 
 package razpravljalnica
 
@@ -492,111 +492,5 @@ var MessageBoard_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "proto/razpravljalnica.proto",
-}
-
-const (
-	ControlPlane_GetClusterState_FullMethodName = "/razpravljalnica.ControlPlane/GetClusterState"
-)
-
-// ControlPlaneClient is the client API for ControlPlane service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Return the the head and the tail node address
-type ControlPlaneClient interface {
-	GetClusterState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetClusterStateResponse, error)
-}
-
-type controlPlaneClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewControlPlaneClient(cc grpc.ClientConnInterface) ControlPlaneClient {
-	return &controlPlaneClient{cc}
-}
-
-func (c *controlPlaneClient) GetClusterState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetClusterStateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetClusterStateResponse)
-	err := c.cc.Invoke(ctx, ControlPlane_GetClusterState_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// ControlPlaneServer is the server API for ControlPlane service.
-// All implementations must embed UnimplementedControlPlaneServer
-// for forward compatibility.
-//
-// Return the the head and the tail node address
-type ControlPlaneServer interface {
-	GetClusterState(context.Context, *emptypb.Empty) (*GetClusterStateResponse, error)
-	mustEmbedUnimplementedControlPlaneServer()
-}
-
-// UnimplementedControlPlaneServer must be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedControlPlaneServer struct{}
-
-func (UnimplementedControlPlaneServer) GetClusterState(context.Context, *emptypb.Empty) (*GetClusterStateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetClusterState not implemented")
-}
-func (UnimplementedControlPlaneServer) mustEmbedUnimplementedControlPlaneServer() {}
-func (UnimplementedControlPlaneServer) testEmbeddedByValue()                      {}
-
-// UnsafeControlPlaneServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ControlPlaneServer will
-// result in compilation errors.
-type UnsafeControlPlaneServer interface {
-	mustEmbedUnimplementedControlPlaneServer()
-}
-
-func RegisterControlPlaneServer(s grpc.ServiceRegistrar, srv ControlPlaneServer) {
-	// If the following call panics, it indicates UnimplementedControlPlaneServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&ControlPlane_ServiceDesc, srv)
-}
-
-func _ControlPlane_GetClusterState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServer).GetClusterState(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlane_GetClusterState_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServer).GetClusterState(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// ControlPlane_ServiceDesc is the grpc.ServiceDesc for ControlPlane service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var ControlPlane_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "razpravljalnica.ControlPlane",
-	HandlerType: (*ControlPlaneServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "GetClusterState",
-			Handler:    _ControlPlane_GetClusterState_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/razpravljalnica.proto",
+	Metadata: "razpravljalnica.proto",
 }
