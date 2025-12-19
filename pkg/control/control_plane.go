@@ -40,22 +40,30 @@ func NewControlPlaneServer() *ControlPlaneServer {
 //
 
 // RegisterNode adds a new node to the chain (called by node at startup)
-func (c *ControlPlaneServer) RegisterNode(nodeID, addr string) {
+func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_ravnina.RegisterNodeRequest) (*nadzorna_ravnina.RegisterNodeResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, exists := c.nodeMap[nodeID]; exists {
-		log.Printf("node %s already registered", nodeID)
-		return
+	if _, exists := c.nodeMap[req.NodeId]; exists {
+		log.Printf("node %s already registered", req.NodeId)
+		return &nadzorna_ravnina.RegisterNodeResponse{
+			Success: false,
+			Message: "node already registered",
+		}, nil
 	}
 	node := &NodeInfo{
-		NodeID:  nodeID,
-		Address: addr,
+		NodeID:  req.NodeId,
+		Address: req.Address,
 		Alive:   true,
 		LastHB:  time.Now(),
 	}
 	c.nodes = append(c.nodes, node)
-	c.nodeMap[nodeID] = node
-	log.Printf("registered node: %s (%s)", nodeID, addr)
+	c.nodeMap[req.Address] = node
+	log.Printf("registered node: %s (%s)", req.NodeId, req.Address)
+
+	return &nadzorna_ravnina.RegisterNodeResponse{
+		Success: true,
+		Message: "registered node sucessfully",
+	}, nil
 }
 
 // DeregisterNode removes a node from the chain

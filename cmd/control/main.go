@@ -1,6 +1,5 @@
 //go run cmd/control/main.go :5000
 
-
 package main
 
 import (
@@ -33,16 +32,13 @@ func main() {
 	// 4. Inicializacija ControlPlane
 	controlPlane := control.NewControlPlaneServer()
 
-
 	// 5. Registracija gRPC servisa
 	nadzorna_ravnina.RegisterControlPlaneServer(grpcServer, controlPlane)
-
 
 	// 6. Zagon monitoringa
 	controlPlane.Start()
 
 	log.Printf("Control Plane running on %s", addr)
-
 
 	// 7. Serve (blocking)
 	if err := grpcServer.Serve(lis); err != nil {

@@ -20,8 +20,22 @@ message GetClusterStateResponse {
     NodeInfo tail = 2;
 }
 
+// Request message for registering a node
+message RegisterNodeRequest {
+  int64 node_id = 1;
+  string address = 2;
+}
+
+// Response message for registering a node
+message RegisterNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
 // ControlPlane service
 service ControlPlane {
     // Returns current head and tail of the cluster
     rpc GetClusterState(google.protobuf.Empty) returns (GetClusterStateResponse);
+    // Register a new node
+    rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
 }
