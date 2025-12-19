@@ -63,6 +63,7 @@ message NodeInfo {
 
 service  MessageBoard{
   // Writes (only to head)
+  
 
   // Creates a new user and assigns it an id
   rpc CreateUser(CreateUserRequest) returns (User);
@@ -86,6 +87,9 @@ service  MessageBoard{
   rpc GetSubcscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
 
   // Reads go to the tail node
+
+  //get user by username
+  rpc GetUser(GetUserRequest) returns (User);
 
   // Returns all the topics
   rpc ListTopics(google.protobuf.Empty) returns (ListTopicsResponse);
@@ -166,4 +170,9 @@ message MessageEvent {
   OpType op = 2; // type of event
   Message message = 3;
   google.protobuf.Timestamp event_at = 4; // timestamp of the event
+}
+
+// Request to fetch a user by name
+message GetUserRequest {
+  string name = 1;
 }

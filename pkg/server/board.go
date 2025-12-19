@@ -50,6 +50,15 @@ func (s *MessageBoardServer) nextSequence() int64 {
 }
 
 // ------------------------ gRPC methods -----------------------------
+func (s *MessageBoardServer) GetUser(ctx context.Context, req *razpravljalnica.GetUserRequest) (*razpravljalnica.User, error) {
+
+	user := s.storage.GetUserByName(req.Name)
+	if user != nil {
+		return user, nil
+	}
+
+	return nil, errors.New("user does not exist")
+}
 
 func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnica.CreateUserRequest) (*razpravljalnica.User, error) {
 	user := &razpravljalnica.User{

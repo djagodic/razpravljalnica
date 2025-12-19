@@ -18,7 +18,7 @@ import (
 
 func main() {
 	addr := flag.String("addr", ":50051", "server address")
-	addrControl := flag.String("addrControl", ":5000", "control plane address")
+	addrControl := flag.String("addrControl", "localhost:5000", "control plane address")
 	nodeID := flag.String("id", "node-1", "node id")
 	isHead := flag.Bool("head", true, "is head")
 	isTail := flag.Bool("tail", false, "is tail")

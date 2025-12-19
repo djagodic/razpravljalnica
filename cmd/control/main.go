@@ -15,7 +15,7 @@ import (
 
 func main() {
 	// 1. Konfiguracija
-	addr := ":5000"
+	addr := "localhost:5000"
 	if len(os.Args) > 1 {
 		addr = os.Args[1]
 	}
@@ -36,7 +36,7 @@ func main() {
 	nadzorna_ravnina.RegisterControlPlaneServer(grpcServer, controlPlane)
 
 	// 6. Zagon monitoringa
-	controlPlane.Start()
+	//controlPlane.Start()
 
 	log.Printf("Control Plane running on %s", addr)
 

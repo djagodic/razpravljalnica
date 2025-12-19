@@ -26,6 +26,24 @@ func NewNodeStorage() *NodeStorage {
 	}
 }
 
+// get user by name
+func (s *NodeStorage) GetUserByName(name string) *razpravljalnica.User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	//TODO mogoce malo pocasna implementacija ker moras cez vse?
+	for _, u := range s.users {
+		if u.Name == name {
+			return &razpravljalnica.User{
+				Id:   u.Id,
+				Name: u.Name,
+			}
+		}
+	}
+
+	return nil
+}
+
 // AddUser adds a new user
 func (s *NodeStorage) AddUser(u *razpravljalnica.User) {
 	s.mu.Lock()

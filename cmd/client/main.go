@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -88,16 +90,53 @@ func startSubscribe(userID int64, topicIDs []int64, client razpravljalnica.Messa
 	fmt.Println("Subscription started in background")
 }
 
+func loginUser(headClient razpravljalnica.MessageBoardClient) (*razpravljalnica.User, error) {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Enter username: ")
+	name, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Failed to read username:", err)
+		return nil, err
+	}
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		fmt.Println("Username cannot be empty")
+		return nil, errors.New("username cannot be empty")
+	}
+
+	// Try to get existing user
+	u, err := headClient.GetUser(
+		context.Background(),
+		&razpravljalnica.GetUserRequest{Name: name},
+	)
+
+	if err == nil {
+		fmt.Printf("Logged in as: %d %s\n", u.Id, u.Name)
+		return u, nil
+	}
+
+	// User does not exist → create new one
+	u, err = headClient.CreateUser(
+		context.Background(),
+		&razpravljalnica.CreateUserRequest{Name: name},
+	)
+	if err != nil {
+		fmt.Println("Error creating user:", err)
+		return u, err
+	}
+
+	fmt.Printf("Created and logged in as: %d %s\n", u.Id, u.Name)
+	return u, nil
+}
+
 func main() {
 	//kot argument ob zaganjanju povej address control_plane
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: client <control_plane_addr>")
-		return
-	}
-	controlAddr := os.Args[1]
+	controlAddr := flag.String("addrControl", "localhost:5000", "control plane address")
 
 	//pridobi lokacijo head, tail
-	head, tail, err := getClusterState(controlAddr)
+	head, tail, err := getClusterState(*controlAddr)
 	if err != nil {
 		log.Fatalf("Failed to get cluster state: %v", err)
 	}
@@ -111,11 +150,15 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	var currentUser *razpravljalnica.User
-
 	fmt.Println("Interactive Razpravljalnica CLI")
-	fmt.Println("Commands: createuser <name>, createtopic <name>, post <topic_id> <text>, update <topic_id> <msg_id> <text>, delete <topic_id> <msg_id>, like <topic_id> <msg_id>, listtopics, listmessages <topic_id>, subscribe <topic_id1,topic_id2,...>, exit")
+	fmt.Println("Commands: createtopic <name>, post <topic_id> <text>, update <topic_id> <msg_id> <text>, delete <topic_id> <msg_id>, like <topic_id> <msg_id>, listtopics, listmessages <topic_id>, subscribe <topic_id1,topic_id2,...>, exit")
 	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
+
+	currentUser, err := loginUser(headClient)
+	for err != nil {
+		currentUser, err = loginUser(headClient)
+	}
+
 	for {
 		fmt.Print("> ")
 		line, _ := reader.ReadString('\n')
@@ -134,19 +177,6 @@ func main() {
 		case "exit":
 			fmt.Println("Exiting CLI")
 			return
-
-		case "createuser":
-			if args == "" {
-				fmt.Println("Usage: createuser <name>")
-				continue
-			}
-			u, err := headClient.CreateUser(context.Background(), &razpravljalnica.CreateUserRequest{Name: args})
-			if err != nil {
-				fmt.Println("Error creating user:", err)
-				continue
-			}
-			currentUser = u
-			fmt.Printf("Created user: %d %s\n", u.Id, u.Name)
 
 		case "createtopic":
 			if args == "" {
