@@ -2,6 +2,8 @@ package server
 
 import (
 	"sync"
+
+	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 )
 
 // OperationType defines replication operation
@@ -10,24 +12,24 @@ type OperationType int
 const (
 	OpCreateUser OperationType = iota
 	OpCreateTopic
-	OpCreateComment
-	OpUpdateComment
-	OpDeleteComment
-	OpLikeComment
+	OpCreateMessage
+	OpUpdateMessage
+	OpDeleteMessage
+	OpLikeMessage
 )
 
 // LogEntry stores operation for replication
 type LogEntry struct {
 	Op       OperationType
-	User     *User
-	Topic    *Topic
-	Comment  *Comment
+	User     *razpravljalnica.User
+	Topic    *razpravljalnica.Topic
+	Message  *razpravljalnica.Message
 	Sequence int64
 }
 
 // ReplicationLog stores all uncommitted events
 type ReplicationLog struct {
-	mu    sync.Mutex
+	mu      sync.Mutex
 	entries []*LogEntry
 }
 

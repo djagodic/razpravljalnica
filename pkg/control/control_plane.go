@@ -13,7 +13,7 @@ import (
 
 // ControlPlaneServer implements api.ControlPlane
 type ControlPlaneServer struct {
-	//api.UnimplementedControlPlaneServer
+	nadzorna_ravnina.UnimplementedControlPlaneServer
 
 	mu       sync.RWMutex
 	nodes    []*NodeInfo // ordered chain: head -> ... -> tail

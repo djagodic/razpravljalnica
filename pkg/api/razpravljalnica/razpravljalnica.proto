@@ -18,6 +18,8 @@ import "google/protobuf/timestamp.proto";
 // Basic data types
 ////////////////////////////////////////////////////////////////////////////////
 
+
+//TODO shrani subscribane topice ob vsakem uporabniku, da ves kaj rabi, ko se logina
 message User {
   int64 id = 1;
   string name = 2;

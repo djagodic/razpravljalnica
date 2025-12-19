@@ -8,13 +8,13 @@ import (
 
 // ReplicateEntry replicates a log entry to next node in chain
 func (s *MessageBoardServer) ReplicateEntry(entry *LogEntry) error {
-	if s.nextNode == nil {
+	if s.NextNode == nil {
 		// tail reached
 		return nil
 	}
 
 	// prepare RPC call to next node
-	client := s.nextNodeClient()
+	client := s.NextNode
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -50,7 +50,7 @@ func (s *MessageBoardServer) ApplyLog(entry *LogEntry) {
 	case OpUpdateComment:
 		_ = s.storage.UpdateComment(entry.Comment)
 	case OpDeleteComment:
-		_ = s.storage.DeleteComment(entry.Comment.TopicID, entry.Comment.ID, entry.Comment.UserID)
+		_ = s.storage.DeleteComment(entry.Comment.TopicId, entry.Comment.ID, entry.Comment.UserID)
 	case OpLikeComment:
 		_, _ = s.storage.LikeComment(entry.Comment.TopicID, entry.Comment.ID)
 	}

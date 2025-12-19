@@ -8,9 +8,13 @@ import (
 	"time"
 
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
-	"github.com/djagodic/razpravljalnica/pkg/common"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var nextUserId int64
+var nextTopicId int64
+var nextMessageId int64
 
 type MessageBoardServer struct {
 	razpravljalnica.UnimplementedMessageBoardServer
@@ -20,20 +24,20 @@ type MessageBoardServer struct {
 
 	seq int64
 
-	nodeID   string
+	nodeId   string
 	IsHead   bool
 	IsTail   bool
-	nextNode *Node
+	NextNode *Node
 
-	// subscription channels: topicID -> userID -> chan *api.MessageEvent
-	subs map[string]map[string]chan *api.MessageEvent
+	// subscription channels: topicId -> userId -> chan *api.MessageEvent
+	subs map[string]map[string]chan *razpravljalnica.MessageEvent
 }
 
-func NewMessageBoardServer(nodeID string, isHead, isTail bool) *MessageBoardServer {
+func NewMessageBoardServer(nodeId string, isHead, isTail bool) *MessageBoardServer {
 	return &MessageBoardServer{
 		storage: NewNodeStorage(),
 		log:     NewReplicationLog(),
-		nodeID:  nodeID,
+		nodeId:  nodeId,
 		IsHead:  isHead,
 		IsTail:  isTail,
 		subs:    make(map[string]map[string]chan *razpravljalnica.MessageEvent),
@@ -48,11 +52,15 @@ func (s *MessageBoardServer) nextSequence() int64 {
 // ------------------------ gRPC methods -----------------------------
 
 func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnica.CreateUserRequest) (*razpravljalnica.User, error) {
-	user := &User{
-		ID:   common.GenID("user"),
+	user := &razpravljalnica.User{
+		Id:   nextUserId,
 		Name: req.Name,
 	}
 	s.storage.AddUser(user)
+
+	//povecamo next user Id
+	//TODO zamenjaj s cim bolj robustnim
+	nextUserId++
 
 	// log and replicate
 	entry := &LogEntry{
@@ -62,21 +70,21 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		go s.ReplicateEntry(entry)
+		//go s.ReplicateEntry(entry)
 	}
 
-	return &razpravljalnica.User{
-		Id:   user.ID,
-		Name: user.Name,
-	}, nil
+	return user, nil
 }
 
 func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalnica.CreateTopicRequest) (*razpravljalnica.Topic, error) {
-	topic := &Topic{
-		ID:   common.GenID("topic"),
+	topic := &razpravljalnica.Topic{
+		Id:   nextTopicId,
 		Name: req.Name,
 	}
 	s.storage.AddTopic(topic)
+
+	//povecamo next topic id
+	nextTopicId++
 
 	entry := &LogEntry{
 		Op:       OpCreateTopic,
@@ -85,68 +93,61 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		go s.ReplicateEntry(entry)
+		//go s.ReplicateEntry(entry)
 	}
 
-	return &razpravljalnica.Topic{
-		Id:   topic.ID,
-		Name: topic.Name,
-	}, nil
+	return topic, nil
 }
 
 func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalnica.PostMessageRequest) (*razpravljalnica.Message, error) {
-	comment := &Comment{
-		ID:        common.GenID("msg"),
-		TopicID:   req.TopicId,
-		UserID:    req.UserId,
-		Body:      req.Text,
-		Timestamp: time.Now(),
+	message := &razpravljalnica.Message{
+		Id:        nextMessageId,
+		TopicId:   req.TopicId,
+		UserId:    req.UserId,
+		Text:      req.Text,
+		CreatedAt: timestamppb.New(time.Now()),
 		Likes:     0,
 	}
 
-	if err := s.storage.AddComment(comment); err != nil {
+	//povecamo next message id
+	nextMessageId++
+
+	if err := s.storage.AddMessage(message); err != nil {
 		return nil, err
 	}
 
 	entry := &LogEntry{
-		Op:       OpCreateComment,
-		Comment:  comment,
+		Op:       OpCreateMessage,
+		Message:  message,
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		go s.ReplicateEntry(entry)
+		//go s.ReplicateEntry(entry)
 	}
 
 	// broadcast to local subscribers
-	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_POST)
+	go s.broadcastToSubscribers(message, razpravljalnica.OpType_OP_POST)
 
-	return &razpravljalnica.Message{
-		Id:        comment.ID,
-		TopicId:   comment.TopicID,
-		UserId:    comment.UserID,
-		Text:      comment.Body,
-		CreatedAt: timestamppbNow(comment.Timestamp),
-		Likes:     comment.Likes,
-	}, nil
+	return message, nil
 }
 
 // helper
-func (s *MessageBoardServer) broadcastToSubscribers(c *Comment, op razpravljalnica.OpType) {
+func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, op razpravljalnica.OpType) {
 	for _, userSubs := range s.subs {
 		for _, ch := range userSubs {
 			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),
 				Op:             op,
 				Message: &razpravljalnica.Message{
-					Id:        c.ID,
-					TopicId:   c.TopicID,
-					UserId:    c.UserID,
-					Text:      c.Body,
-					CreatedAt: timestamppbNow(c.Timestamp),
+					Id:        c.Id,
+					TopicId:   c.TopicId,
+					UserId:    c.UserId,
+					Text:      c.Text,
+					CreatedAt: c.CreatedAt,
 					Likes:     c.Likes,
 				},
-				EventAt: timestamppbNow(time.Now()),
+				EventAt: timestamppb.New(time.Now()),
 			}
 			select {
 			case ch <- ev:
@@ -157,74 +158,66 @@ func (s *MessageBoardServer) broadcastToSubscribers(c *Comment, op razpravljalni
 	}
 }
 
-// Helper to convert time.Time -> protobuf Timestamp
-func timestamppbNow(t time.Time) *razpravljalnica.Timestamp {
-	return &razpravljalnica.Timestamp{
-		Seconds: t.Unix(),
-		Nanos:   int32(t.Nanosecond()),
-	}
-}
-
 // ------------------------ UpdateMessage -------------------------
-func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *api.UpdateMessageRequest) (*razpravljalnica.Message, error) {
-	comment, err := s.storage.GetComment(req.TopicId, req.MessageId)
+func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljalnica.UpdateMessageRequest) (*razpravljalnica.Message, error) {
+	comment, err := s.storage.GetMessage(req.TopicId, req.MessageId)
 	if err != nil {
 		return nil, err
 	}
-	if comment.UserID != req.UserId {
+	if comment.UserId != req.UserId {
 		return nil, errors.New("user not authorized to update this message")
 	}
 
-	comment.Body = req.Text
-	comment.Timestamp = time.Now()
-	if err := s.storage.UpdateComment(comment); err != nil {
+	comment.Text = req.Text
+	comment.CreatedAt = timestamppb.New(time.Now())
+	if err := s.storage.UpdateMessage(comment); err != nil {
 		return nil, err
 	}
 
 	entry := &LogEntry{
-		Op:       OpUpdateComment,
-		Comment:  comment,
+		Op:       OpUpdateMessage,
+		Message:  comment,
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		go s.ReplicateEntry(entry)
+		//go s.ReplicateEntry(entry)
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_UPDATE)
 
 	return &razpravljalnica.Message{
-		Id:        comment.ID,
-		TopicId:   comment.TopicID,
-		UserId:    comment.UserID,
-		Text:      comment.Body,
-		CreatedAt: timestamppbNow(comment.Timestamp),
+		Id:        comment.Id,
+		TopicId:   comment.TopicId,
+		UserId:    comment.UserId,
+		Text:      comment.Text,
+		CreatedAt: comment.CreatedAt,
 		Likes:     comment.Likes,
 	}, nil
 }
 
 // ------------------------ DeleteMessage -------------------------
 func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljalnica.DeleteMessageRequest) (*emptypb.Empty, error) {
-	comment, err := s.storage.GetComment(req.TopicId, req.MessageId)
+	comment, err := s.storage.GetMessage(req.TopicId, req.MessageId)
 	if err != nil {
 		return nil, err
 	}
-	if comment.UserID != req.UserId {
+	if comment.UserId != req.UserId {
 		return nil, errors.New("user not authorized to delete this message")
 	}
 
-	if err := s.storage.DeleteComment(req.TopicId, req.MessageId, req.UserId); err != nil {
+	if err := s.storage.DeleteMessage(req.TopicId, req.MessageId, req.UserId); err != nil {
 		return nil, err
 	}
 
 	entry := &LogEntry{
-		Op:       OpDeleteComment,
-		Comment:  comment,
+		Op:       OpDeleteMessage,
+		Message:  comment,
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		go s.ReplicateEntry(entry)
+		//go s.ReplicateEntry(entry)
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_DELETE)
@@ -234,29 +227,29 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 
 // ------------------------ LikeMessage ---------------------------
 func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalnica.LikeMessageRequest) (*razpravljalnica.Message, error) {
-	comment, err := s.storage.LikeComment(req.TopicId, req.MessageId)
+	comment, err := s.storage.LikeMessage(req.TopicId, req.MessageId)
 	if err != nil {
 		return nil, err
 	}
 
 	entry := &LogEntry{
-		Op:       OpLikeComment,
-		Comment:  comment,
+		Op:       OpLikeMessage,
+		Message:  comment,
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		go s.ReplicateEntry(entry)
+		//go s.ReplicateEntry(entry)
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_LIKE)
 
 	return &razpravljalnica.Message{
-		Id:        comment.ID,
-		TopicId:   comment.TopicID,
-		UserId:    comment.UserID,
-		Text:      comment.Body,
-		CreatedAt: timestamppbNow(comment.Timestamp),
+		Id:        comment.Id,
+		TopicId:   comment.TopicId,
+		UserId:    comment.UserId,
+		Text:      comment.Text,
+		CreatedAt: comment.CreatedAt,
 		Likes:     comment.Likes,
 	}, nil
 }
@@ -267,7 +260,7 @@ func (s *MessageBoardServer) ListTopics(ctx context.Context, _ *emptypb.Empty) (
 	apiTopics := make([]*razpravljalnica.Topic, 0, len(topics))
 	for _, t := range topics {
 		apiTopics = append(apiTopics, &razpravljalnica.Topic{
-			Id:   t.ID,
+			Id:   t.Id,
 			Name: t.Name,
 		})
 	}
@@ -276,15 +269,19 @@ func (s *MessageBoardServer) ListTopics(ctx context.Context, _ *emptypb.Empty) (
 
 // ------------------------ GetMessages ---------------------------
 func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalnica.GetMessagesRequest) (*razpravljalnica.GetMessagesResponse, error) {
-	messages := s.storage.GetMessages(req.TopicId, req.FromMessageId, int(req.Limit))
+	messages, err := s.storage.GetMessages(req.TopicId, req.FromMessageId, int(req.Limit))
+	if err != nil {
+		return nil, err
+	}
+
 	apiMessages := make([]*razpravljalnica.Message, 0, len(messages))
 	for _, m := range messages {
 		apiMessages = append(apiMessages, &razpravljalnica.Message{
-			Id:        m.ID,
-			TopicId:   m.TopicID,
-			UserId:    m.UserID,
-			Text:      m.Body,
-			CreatedAt: timestamppbNow(m.Timestamp),
+			Id:        m.Id,
+			TopicId:   m.TopicId,
+			UserId:    m.UserId,
+			Text:      m.Text,
+			CreatedAt: m.CreatedAt,
 			Likes:     m.Likes,
 		})
 	}
@@ -293,28 +290,31 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalni
 
 // ------------------------ SubscribeTopic ------------------------
 func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicRequest, stream razpravljalnica.MessageBoard_SubscribeTopicServer) error {
-	for _, topicID := range req.TopicId {
-		if _, ok := s.subs[fmt.Sprint(topicID)]; !ok {
-			s.subs[fmt.Sprint(topicID)] = make(map[string]chan *razpravljalnica.MessageEvent)
+	for _, topicId := range req.TopicId {
+		if _, ok := s.subs[fmt.Sprint(topicId)]; !ok {
+			s.subs[fmt.Sprint(topicId)] = make(map[string]chan *razpravljalnica.MessageEvent)
 		}
 		ch := make(chan *razpravljalnica.MessageEvent, 100)
-		s.subs[fmt.Sprint(topicID)][fmt.Sprint(req.UserId)] = ch
+		s.subs[fmt.Sprint(topicId)][fmt.Sprint(req.UserId)] = ch
 
 		// send historical messages
-		msgs := s.storage.GetMessages(topicID, req.FromMessageId, 100)
+		msgs, err := s.storage.GetMessages(topicId, req.FromMessageId, 100)
+		if err != nil {
+			return err
+		}
 		for _, m := range msgs {
 			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),
 				Op:             razpravljalnica.OpType_OP_POST,
 				Message: &razpravljalnica.Message{
-					Id:        m.ID,
-					TopicId:   m.TopicID,
-					UserId:    m.UserID,
-					Text:      m.Body,
-					CreatedAt: timestamppbNow(m.Timestamp),
+					Id:        m.Id,
+					TopicId:   m.TopicId,
+					UserId:    m.UserId,
+					Text:      m.Text,
+					CreatedAt: m.CreatedAt,
 					Likes:     m.Likes,
 				},
-				EventAt: timestamppbNow(time.Now()),
+				EventAt: timestamppb.New(time.Now()),
 			}
 			if err := stream.Send(ev); err != nil {
 				return err
