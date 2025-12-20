@@ -140,7 +140,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get cluster state: %v", err)
 	}
-	fmt.Printf("Head node: %s (%s), Tail node: %s (%s)\n", head.NodeId, head.Address, tail.NodeId, tail.Address)
+	log.Printf("Head node: %s (%s), Tail node: %s (%s)\n", head.NodeId, head.Address, tail.NodeId, tail.Address)
 
 	//connectaj v head in tail
 	headClient, connHead := connectToNode(head.Address)
@@ -151,7 +151,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("Interactive Razpravljalnica CLI")
-	fmt.Println("Commands: createtopic <name>, post <topic_id> <text>, update <topic_id> <msg_id> <text>, delete <topic_id> <msg_id>, like <topic_id> <msg_id>, listtopics, listmessages <topic_id>, subscribe <topic_id1,topic_id2,...>, exit")
+	log.Println("Commands: createtopic <name>, post <topic_id> <text>, update <topic_id> <msg_id> <text>, delete <topic_id> <msg_id>, like <topic_id> <msg_id>, listtopics, listmessages <topic_id>, subscribe <topic_id1,topic_id2,...>, exit")
 	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
 
 	currentUser, err := loginUser(headClient)

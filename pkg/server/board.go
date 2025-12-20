@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -54,6 +55,7 @@ func (s *MessageBoardServer) GetUser(ctx context.Context, req *razpravljalnica.G
 
 	user := s.storage.GetUserByName(req.Name)
 	if user != nil {
+		log.Printf("getUser -> %d (%s)", user.Id, user.Name)
 		return user, nil
 	}
 
@@ -82,6 +84,7 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 		//go s.ReplicateEntry(entry)
 	}
 
+	log.Printf("createUser -> %d (%s)", user.Id, user.Name)
 	return user, nil
 }
 
@@ -105,6 +108,7 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 		//go s.ReplicateEntry(entry)
 	}
 
+	log.Printf("createTopic -> %d (%s)", topic.Id, topic.Name)
 	return topic, nil
 }
 
@@ -138,6 +142,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	// broadcast to local subscribers
 	go s.broadcastToSubscribers(message, razpravljalnica.OpType_OP_POST)
 
+	log.Printf("postMessage -> %d (%s) at %d by user %d", message.Id, message.Text, message.TopicId, message.UserId)
 	return message, nil
 }
 
@@ -195,6 +200,7 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_UPDATE)
 
+	log.Printf("updateMessage -> %d at %d by %d to \"%s\"", comment.Id, comment.TopicId, comment.UserId, comment.Text)
 	return &razpravljalnica.Message{
 		Id:        comment.Id,
 		TopicId:   comment.TopicId,
@@ -231,6 +237,7 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_DELETE)
 
+	log.Printf("deleteMessage -> %d at %d deleted by %d", req.MessageId, req.TopicId, req.UserId)
 	return &emptypb.Empty{}, nil
 }
 
@@ -253,6 +260,7 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_LIKE)
 
+	log.Printf("likeMessage -> %d at %d liked by %d", req.MessageId, req.TopicId, req.UserId)
 	return &razpravljalnica.Message{
 		Id:        comment.Id,
 		TopicId:   comment.TopicId,
@@ -273,6 +281,8 @@ func (s *MessageBoardServer) ListTopics(ctx context.Context, _ *emptypb.Empty) (
 			Name: t.Name,
 		})
 	}
+
+	log.Printf("listTopics -> OK")
 	return &razpravljalnica.ListTopicsResponse{Topics: apiTopics}, nil
 }
 
@@ -294,6 +304,8 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalni
 			Likes:     m.Likes,
 		})
 	}
+
+	log.Printf("getMessages -> at topic %d from %d limit %d", req.TopicId, req.FromMessageId, req.Limit)
 	return &razpravljalnica.GetMessagesResponse{Messages: apiMessages}, nil
 }
 

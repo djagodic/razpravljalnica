@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -46,9 +45,9 @@ func main() {
 
 	//preverimo response
 	if resp.Success {
-		fmt.Printf("Node registered successfully: %s\n", resp.Message)
+		log.Printf("Node registered successfully: %s\n", resp.Message)
 	} else {
-		fmt.Printf("Failed to register node: %s\n", resp.Message)
+		log.Printf("Failed to register node: %s\n", resp.Message)
 	}
 
 	//glede na response doloci head in tail
@@ -76,7 +75,7 @@ func main() {
 		log.Fatalf("listen failed: %v", err)
 	}
 
-	fmt.Printf("gRPC server listening at %v%v\n", hostName, addr)
+	log.Printf("gRPC server listening at %v%v\n", hostName, addr)
 
 	log.Printf("Starting node %s at %s (head=%v, tail=%v)", *nodeID, *addr, *isHead, *isTail)
 
