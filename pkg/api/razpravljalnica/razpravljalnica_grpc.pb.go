@@ -28,17 +28,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MessageBoard_CreateUser_FullMethodName           = "/razpravljalnica.MessageBoard/CreateUser"
-	MessageBoard_CreateTopic_FullMethodName          = "/razpravljalnica.MessageBoard/CreateTopic"
-	MessageBoard_PostMessage_FullMethodName          = "/razpravljalnica.MessageBoard/PostMessage"
-	MessageBoard_UpdateMessage_FullMethodName        = "/razpravljalnica.MessageBoard/UpdateMessage"
-	MessageBoard_DeleteMessage_FullMethodName        = "/razpravljalnica.MessageBoard/DeleteMessage"
-	MessageBoard_LikeMessage_FullMethodName          = "/razpravljalnica.MessageBoard/LikeMessage"
-	MessageBoard_GetSubcscriptionNode_FullMethodName = "/razpravljalnica.MessageBoard/GetSubcscriptionNode"
-	MessageBoard_GetUser_FullMethodName              = "/razpravljalnica.MessageBoard/GetUser"
-	MessageBoard_ListTopics_FullMethodName           = "/razpravljalnica.MessageBoard/ListTopics"
-	MessageBoard_GetMessages_FullMethodName          = "/razpravljalnica.MessageBoard/GetMessages"
-	MessageBoard_SubscribeTopic_FullMethodName       = "/razpravljalnica.MessageBoard/SubscribeTopic"
+	MessageBoard_CreateUser_FullMethodName     = "/razpravljalnica.MessageBoard/CreateUser"
+	MessageBoard_CreateTopic_FullMethodName    = "/razpravljalnica.MessageBoard/CreateTopic"
+	MessageBoard_PostMessage_FullMethodName    = "/razpravljalnica.MessageBoard/PostMessage"
+	MessageBoard_UpdateMessage_FullMethodName  = "/razpravljalnica.MessageBoard/UpdateMessage"
+	MessageBoard_DeleteMessage_FullMethodName  = "/razpravljalnica.MessageBoard/DeleteMessage"
+	MessageBoard_LikeMessage_FullMethodName    = "/razpravljalnica.MessageBoard/LikeMessage"
+	MessageBoard_GetUser_FullMethodName        = "/razpravljalnica.MessageBoard/GetUser"
+	MessageBoard_ListTopics_FullMethodName     = "/razpravljalnica.MessageBoard/ListTopics"
+	MessageBoard_GetMessages_FullMethodName    = "/razpravljalnica.MessageBoard/GetMessages"
+	MessageBoard_SubscribeTopic_FullMethodName = "/razpravljalnica.MessageBoard/SubscribeTopic"
 )
 
 // MessageBoardClient is the client API for MessageBoard service.
@@ -57,8 +56,6 @@ type MessageBoardClient interface {
 	DeleteMessage(ctx context.Context, in *DeleteMessageRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Like an existing message. Return the message with the new number of likes.
 	LikeMessage(ctx context.Context, in *LikeMessageRequest, opts ...grpc.CallOption) (*Message, error)
-	// Request a node to which a subscription can be opened.
-	GetSubcscriptionNode(ctx context.Context, in *SubscriptionNodeRequest, opts ...grpc.CallOption) (*SubscriptionNodeResponse, error)
 	// get user by username
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*User, error)
 	// Returns all the topics
@@ -137,16 +134,6 @@ func (c *messageBoardClient) LikeMessage(ctx context.Context, in *LikeMessageReq
 	return out, nil
 }
 
-func (c *messageBoardClient) GetSubcscriptionNode(ctx context.Context, in *SubscriptionNodeRequest, opts ...grpc.CallOption) (*SubscriptionNodeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SubscriptionNodeResponse)
-	err := c.cc.Invoke(ctx, MessageBoard_GetSubcscriptionNode_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *messageBoardClient) GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*User, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(User)
@@ -212,8 +199,6 @@ type MessageBoardServer interface {
 	DeleteMessage(context.Context, *DeleteMessageRequest) (*emptypb.Empty, error)
 	// Like an existing message. Return the message with the new number of likes.
 	LikeMessage(context.Context, *LikeMessageRequest) (*Message, error)
-	// Request a node to which a subscription can be opened.
-	GetSubcscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error)
 	// get user by username
 	GetUser(context.Context, *GetUserRequest) (*User, error)
 	// Returns all the topics
@@ -249,9 +234,6 @@ func (UnimplementedMessageBoardServer) DeleteMessage(context.Context, *DeleteMes
 }
 func (UnimplementedMessageBoardServer) LikeMessage(context.Context, *LikeMessageRequest) (*Message, error) {
 	return nil, status.Error(codes.Unimplemented, "method LikeMessage not implemented")
-}
-func (UnimplementedMessageBoardServer) GetSubcscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetSubcscriptionNode not implemented")
 }
 func (UnimplementedMessageBoardServer) GetUser(context.Context, *GetUserRequest) (*User, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUser not implemented")
@@ -394,24 +376,6 @@ func _MessageBoard_LikeMessage_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MessageBoard_GetSubcscriptionNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SubscriptionNodeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MessageBoardServer).GetSubcscriptionNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MessageBoard_GetSubcscriptionNode_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MessageBoardServer).GetSubcscriptionNode(ctx, req.(*SubscriptionNodeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MessageBoard_GetUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetUserRequest)
 	if err := dec(in); err != nil {
@@ -507,10 +471,6 @@ var MessageBoard_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LikeMessage",
 			Handler:    _MessageBoard_LikeMessage_Handler,
-		},
-		{
-			MethodName: "GetSubcscriptionNode",
-			Handler:    _MessageBoard_GetSubcscriptionNode_Handler,
 		},
 		{
 			MethodName: "GetUser",

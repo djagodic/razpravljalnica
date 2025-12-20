@@ -22,8 +22,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPlane_GetClusterState_FullMethodName = "/controlplane.ControlPlane/GetClusterState"
-	ControlPlane_RegisterNode_FullMethodName    = "/controlplane.ControlPlane/RegisterNode"
+	ControlPlane_GetClusterState_FullMethodName      = "/controlplane.ControlPlane/GetClusterState"
+	ControlPlane_RegisterNode_FullMethodName         = "/controlplane.ControlPlane/RegisterNode"
+	ControlPlane_GetSubcscriptionNode_FullMethodName = "/controlplane.ControlPlane/GetSubcscriptionNode"
 )
 
 // ControlPlaneClient is the client API for ControlPlane service.
@@ -36,6 +37,8 @@ type ControlPlaneClient interface {
 	GetClusterState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetClusterStateResponse, error)
 	// Register a new node
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
+	// Request a node to which a subscription can be opened.
+	GetSubcscriptionNode(ctx context.Context, in *SubscriptionNodeRequest, opts ...grpc.CallOption) (*SubscriptionNodeResponse, error)
 }
 
 type controlPlaneClient struct {
@@ -66,6 +69,16 @@ func (c *controlPlaneClient) RegisterNode(ctx context.Context, in *RegisterNodeR
 	return out, nil
 }
 
+func (c *controlPlaneClient) GetSubcscriptionNode(ctx context.Context, in *SubscriptionNodeRequest, opts ...grpc.CallOption) (*SubscriptionNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubscriptionNodeResponse)
+	err := c.cc.Invoke(ctx, ControlPlane_GetSubcscriptionNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlPlaneServer is the server API for ControlPlane service.
 // All implementations must embed UnimplementedControlPlaneServer
 // for forward compatibility.
@@ -76,6 +89,8 @@ type ControlPlaneServer interface {
 	GetClusterState(context.Context, *emptypb.Empty) (*GetClusterStateResponse, error)
 	// Register a new node
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
+	// Request a node to which a subscription can be opened.
+	GetSubcscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error)
 	mustEmbedUnimplementedControlPlaneServer()
 }
 
@@ -91,6 +106,9 @@ func (UnimplementedControlPlaneServer) GetClusterState(context.Context, *emptypb
 }
 func (UnimplementedControlPlaneServer) RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterNode not implemented")
+}
+func (UnimplementedControlPlaneServer) GetSubcscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSubcscriptionNode not implemented")
 }
 func (UnimplementedControlPlaneServer) mustEmbedUnimplementedControlPlaneServer() {}
 func (UnimplementedControlPlaneServer) testEmbeddedByValue()                      {}
@@ -149,6 +167,24 @@ func _ControlPlane_RegisterNode_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlane_GetSubcscriptionNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscriptionNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServer).GetSubcscriptionNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlane_GetSubcscriptionNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServer).GetSubcscriptionNode(ctx, req.(*SubscriptionNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlPlane_ServiceDesc is the grpc.ServiceDesc for ControlPlane service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -163,6 +199,10 @@ var ControlPlane_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RegisterNode",
 			Handler:    _ControlPlane_RegisterNode_Handler,
+		},
+		{
+			MethodName: "GetSubcscriptionNode",
+			Handler:    _ControlPlane_GetSubcscriptionNode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

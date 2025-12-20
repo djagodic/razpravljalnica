@@ -142,7 +142,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	// broadcast to local subscribers
 	go s.broadcastToSubscribers(message, razpravljalnica.OpType_OP_POST)
 
-	log.Printf("postMessage -> %d (%s) at %d by user %d", message.Id, message.Text, message.TopicId, message.UserId)
+	log.Printf("postMessage -> %d (%s) at topic %d by user %d", message.Id, message.Text, message.TopicId, message.UserId)
 	return message, nil
 }
 
@@ -354,3 +354,49 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 	// block to keep the stream open
 	select {}
 }
+
+// func (s *MessageBoardServer) GetSubcscriptionNode(
+// 	ctx context.Context,
+// 	req *razpravljalnica.SubscriptionNodeRequest,
+// ) (*razpravljalnica.SubscriptionNodeResponse, error) {
+
+// 	// 1. vprašaj control plane za stanje
+// 	state, err := s.control.GetClusterState(
+// 		ctx,
+// 		&emptypb.Empty{},
+// 	)
+// 	if err != nil {
+// 		return nil, status.Error(codes.Unavailable, "control plane unreachable")
+// 	}
+
+// 	nodes := []*razpravljalnica.NodeInfo{
+// 		state.Head,
+// 		state.Tail,
+// 	}
+
+// 	if len(nodes) == 0 {
+// 		return nil, status.Error(codes.Unavailable, "no nodes available")
+// 	}
+
+// 	// 2. deterministična izbira
+// 	sum := req.UserId
+// 	for _, t := range req.TopicId {
+// 		sum += t
+// 	}
+
+// 	node := nodes[sum%int64(len(nodes))]
+
+// 	// 3. token
+// 	token := fmt.Sprintf(
+// 		"%s:%d:%d",
+// 		node.NodeId,
+// 		req.UserId,
+// 		time.Now().Unix(),
+// 	)
+
+// 	return &razpravljalnica.SubscriptionNodeResponse{
+// 		SubscribeToken: token,
+// 		Node:           node,
+// 	}, nil
+// }
+

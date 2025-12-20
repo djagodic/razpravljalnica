@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -165,6 +166,45 @@ func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Emp
 		},
 	}, nil
 }
+
+func (c *ControlPlaneServer) GetSubcscriptionNode(
+	ctx context.Context,
+	req *nadzorna_ravnina.SubscriptionNodeRequest,
+) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	//TODO preveri ce je 0 serverjev online in vrni da ni mogoce dodeliti serverja za subscribe
+	// if len(c.nodes) == 0 {
+	// 	return nil, status.Error(codes.Unavailable, "no nodes available")
+	// }
+
+	// Deterministic selection
+	sum := req.UserId
+	for _, t := range req.TopicId {
+		sum += t
+	}
+
+	idx := sum % int64(len(c.nodes))
+	node := c.nodes[idx]
+
+	token := fmt.Sprintf(
+		"%s:%d:%d",
+		node.NodeID,
+		req.UserId,
+		time.Now().Unix(),
+	)
+
+	return &nadzorna_ravnina.SubscriptionNodeResponse{
+		SubscribeToken: token,
+		Node: &nadzorna_ravnina.NodeInfo{
+			NodeId:  node.NodeID,
+			Address: node.Address,
+		},
+	}, nil
+}
+
 
 // Start launches monitoring loop
 func (c *ControlPlaneServer) Start() {

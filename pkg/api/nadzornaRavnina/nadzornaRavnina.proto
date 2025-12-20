@@ -34,10 +34,22 @@ message RegisterNodeResponse {
   bool is_tail = 4;
 }
 
+message SubscriptionNodeRequest {
+  int64 user_id = 1;
+  repeated int64 topic_id = 2;
+}
+
+message SubscriptionNodeResponse {
+  string subscribe_token = 1; // subscription token to be presented to the returned node
+  NodeInfo node = 2;
+}
+
 // ControlPlane service
 service ControlPlane {
     // Returns current head and tail of the cluster
     rpc GetClusterState(google.protobuf.Empty) returns (GetClusterStateResponse);
     // Register a new node
     rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+      // Request a node to which a subscription can be opened.
+    rpc GetSubcscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
 }
