@@ -12,6 +12,7 @@ import (
 )
 
 // ControlPlaneServer implements api.ControlPlane
+// TODO spremeni nodes v Linked List
 type ControlPlaneServer struct {
 	nadzorna_ravnina.UnimplementedControlPlaneServer
 
@@ -43,13 +44,29 @@ func NewControlPlaneServer() *ControlPlaneServer {
 func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_ravnina.RegisterNodeRequest) (*nadzorna_ravnina.RegisterNodeResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, exists := c.nodeMap[req.NodeId]; exists {
-		log.Printf("node %s already registered", req.NodeId)
-		return &nadzorna_ravnina.RegisterNodeResponse{
-			Success: false,
-			Message: "node already registered",
-		}, nil
+	for idx, nodeInfo := range c.nodes {
+		//node je ze registriran
+		if nodeInfo.NodeID == req.NodeId {
+			log.Printf("node %s already registered, at idx %d", req.NodeId, idx)
+			//doloci head, tail
+			isHead := false
+			isTail := false
+			if idx == 0 {
+				isHead = true
+			}
+			if idx == len(c.nodes)-1 {
+				isTail = true
+			}
+			return &nadzorna_ravnina.RegisterNodeResponse{
+				Success: false,
+				Message: "node already registered",
+				IsHead:  isHead,
+				IsTail:  isTail,
+			}, nil
+		}
 	}
+
+	//node se ni registriran
 	node := &NodeInfo{
 		NodeID:  req.NodeId,
 		Address: req.Address,
@@ -60,9 +77,18 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 	c.nodeMap[req.Address] = node
 	log.Printf("registered node: %s (%s)", req.NodeId, req.Address)
 
+	//doloci head in tail
+	isHead := false
+	isTail := true
+	if len(c.nodes) == 1 { //ce je to edini node je tudi head
+		isHead = true
+	}
+
 	return &nadzorna_ravnina.RegisterNodeResponse{
 		Success: true,
 		Message: "registered node sucessfully",
+		IsHead:  isHead,
+		IsTail:  isTail,
 	}, nil
 }
 

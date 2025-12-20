@@ -188,6 +188,8 @@ type RegisterNodeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	IsHead        bool                   `protobuf:"varint,3,opt,name=is_head,json=isHead,proto3" json:"is_head,omitempty"`
+	IsTail        bool                   `protobuf:"varint,4,opt,name=is_tail,json=isTail,proto3" json:"is_tail,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -236,6 +238,20 @@ func (x *RegisterNodeResponse) GetMessage() string {
 	return ""
 }
 
+func (x *RegisterNodeResponse) GetIsHead() bool {
+	if x != nil {
+		return x.IsHead
+	}
+	return false
+}
+
+func (x *RegisterNodeResponse) GetIsTail() bool {
+	if x != nil {
+		return x.IsTail
+	}
+	return false
+}
+
 var File_nadzornaRavnina_proto protoreflect.FileDescriptor
 
 const file_nadzornaRavnina_proto_rawDesc = "" +
@@ -249,10 +265,12 @@ const file_nadzornaRavnina_proto_rawDesc = "" +
 	"\x04tail\x18\x02 \x01(\v2\x16.controlplane.NodeInfoR\x04tail\"H\n" +
 	"\x13RegisterNodeRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x18\n" +
-	"\aaddress\x18\x02 \x01(\tR\aaddress\"J\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\"|\n" +
 	"\x14RegisterNodeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\xb7\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x17\n" +
+	"\ais_head\x18\x03 \x01(\bR\x06isHead\x12\x17\n" +
+	"\ais_tail\x18\x04 \x01(\bR\x06isTail2\xb7\x01\n" +
 	"\fControlPlane\x12P\n" +
 	"\x0fGetClusterState\x12\x16.google.protobuf.Empty\x1a%.controlplane.GetClusterStateResponse\x12U\n" +
 	"\fRegisterNode\x12!.controlplane.RegisterNodeRequest\x1a\".controlplane.RegisterNodeResponseB\x1aZ\x18pkg/api/nadzorna_ravninab\x06proto3"

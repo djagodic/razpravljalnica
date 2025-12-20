@@ -20,8 +20,8 @@ func main() {
 	addr := flag.String("addr", ":50051", "server address")
 	addrControl := flag.String("addrControl", "localhost:5000", "control plane address")
 	nodeID := flag.String("id", "node-1", "node id")
-	isHead := flag.Bool("head", true, "is head")
-	isTail := flag.Bool("tail", false, "is tail")
+	//isHead := flag.Bool("head", true, "is head")
+	//isTail := flag.Bool("tail", false, "is tail")
 	flag.Parse()
 
 	conn, err := grpc.NewClient(*addrControl, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -50,6 +50,10 @@ func main() {
 	} else {
 		fmt.Printf("Failed to register node: %s\n", resp.Message)
 	}
+
+	//glede na response doloci head in tail
+	isHead := &resp.IsHead
+	isTail := &resp.IsTail
 
 	//naredimo nov grpc strezik
 	s := grpc.NewServer()

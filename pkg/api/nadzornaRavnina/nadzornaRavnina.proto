@@ -22,7 +22,7 @@ message GetClusterStateResponse {
 
 // Request message for registering a node
 message RegisterNodeRequest {
-  int64 node_id = 1;
+  string node_id = 1;
   string address = 2;
 }
 
@@ -30,6 +30,8 @@ message RegisterNodeRequest {
 message RegisterNodeResponse {
   bool success = 1;
   string message = 2;
+  bool is_head = 3;
+  bool is_tail = 4;
 }
 
 // ControlPlane service
