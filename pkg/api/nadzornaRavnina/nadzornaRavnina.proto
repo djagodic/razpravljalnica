@@ -51,5 +51,5 @@ service ControlPlane {
     // Register a new node
     rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
       // Request a node to which a subscription can be opened.
-    rpc GetSubcscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
+    rpc GetSubscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
 }

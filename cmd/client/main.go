@@ -45,53 +45,16 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 	return razpravljalnica.NewMessageBoardClient(conn), conn
 }
 
-// func startSubscribe(userID int64, topicIDs []int64, client razpravljalnica.MessageBoardClient) {
-// 	ctx := context.Background()
 
-// 	// pridobi token za subscription
-// 	subResp, err := client.GetSubcscriptionNode(ctx, &razpravljalnica.SubscriptionNodeRequest{
-// 		UserId:  userID,
-// 		TopicId: topicIDs,
-// 	})
-// 	if err != nil {
-// 		log.Printf("Failed to get subscription node: %v", err)
-// 		return
-// 	}
-
-// 	subConn, err := grpc.Dial(subResp.Node.Address, grpc.WithInsecure())
-// 	if err != nil {
-// 		log.Printf("Failed to connect to subscription node: %v", err)
-// 		return
-// 	}
-// 	subClient := razpravljalnica.NewMessageBoardClient(subConn)
-
-// 	stream, err := subClient.SubscribeTopic(ctx, &razpravljalnica.SubscribeTopicRequest{
-// 		UserId:         userID,
-// 		TopicId:        topicIDs,
-// 		FromMessageId:  0,
-// 		SubscribeToken: subResp.SubscribeToken,
-// 	})
-// 	if err != nil {
-// 		log.Printf("Subscribe failed: %v", err)
-// 		return
-// 	}
-
-// 	go func() {
-// 		for {
-// 			ev, err := stream.Recv()
-// 			if err != nil {
-// 				log.Printf("Subscription ended: %v", err)
-// 				return
-// 			}
-// 			fmt.Printf("[EVENT] %v | Topic %d | User %d: %s (Likes: %d)\n",
-// 				ev.Op, ev.Message.TopicId, ev.Message.UserId, ev.Message.Text, ev.Message.Likes)
-// 		}
-// 	}()
-// 	fmt.Println("Subscription started in background")
-// }
-
-func startSubscribe(userID int64, topicIDs []int64, cpClient control.ControlPlaneClient) {
+func startSubscribe(userID int64, topicIDs []int64, controlAddr string) {
 	ctx := context.Background()
+
+	cpConn, err := grpc.Dial(controlAddr, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect to control plane: %v", err)
+	}
+	defer cpConn.Close()
+	cpClient := control.NewControlPlaneClient(cpConn)
 
 	// 1. Ask the control plane which node to subscribe to
 	subResp, err := cpClient.GetSubscriptionNode(ctx, &control.SubscriptionNodeRequest{
@@ -369,7 +332,7 @@ func main() {
 				id, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 				topicIDs = append(topicIDs, id)
 			}
-			startSubscribe(currentUser.Id, topicIDs, headClient)
+			startSubscribe(currentUser.Id, topicIDs, *controlAddr)
 
 		default:
 			fmt.Println("Unknown command")

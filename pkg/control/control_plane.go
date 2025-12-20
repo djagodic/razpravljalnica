@@ -167,10 +167,7 @@ func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Emp
 	}, nil
 }
 
-func (c *ControlPlaneServer) GetSubcscriptionNode(
-	ctx context.Context,
-	req *nadzorna_ravnina.SubscriptionNodeRequest,
-) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
+func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzorna_ravnina.SubscriptionNodeRequest) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()

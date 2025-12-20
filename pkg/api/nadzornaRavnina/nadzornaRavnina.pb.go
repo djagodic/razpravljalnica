@@ -380,11 +380,11 @@ const file_nadzornaRavnina_proto_rawDesc = "" +
 	"\btopic_id\x18\x02 \x03(\x03R\atopicId\"o\n" +
 	"\x18SubscriptionNodeResponse\x12'\n" +
 	"\x0fsubscribe_token\x18\x01 \x01(\tR\x0esubscribeToken\x12*\n" +
-	"\x04node\x18\x02 \x01(\v2\x16.controlplane.NodeInfoR\x04node2\x9e\x02\n" +
+	"\x04node\x18\x02 \x01(\v2\x16.controlplane.NodeInfoR\x04node2\x9d\x02\n" +
 	"\fControlPlane\x12P\n" +
 	"\x0fGetClusterState\x12\x16.google.protobuf.Empty\x1a%.controlplane.GetClusterStateResponse\x12U\n" +
-	"\fRegisterNode\x12!.controlplane.RegisterNodeRequest\x1a\".controlplane.RegisterNodeResponse\x12e\n" +
-	"\x14GetSubcscriptionNode\x12%.controlplane.SubscriptionNodeRequest\x1a&.controlplane.SubscriptionNodeResponseB\x1aZ\x18pkg/api/nadzorna_ravninab\x06proto3"
+	"\fRegisterNode\x12!.controlplane.RegisterNodeRequest\x1a\".controlplane.RegisterNodeResponse\x12d\n" +
+	"\x13GetSubscriptionNode\x12%.controlplane.SubscriptionNodeRequest\x1a&.controlplane.SubscriptionNodeResponseB\x1aZ\x18pkg/api/nadzorna_ravninab\x06proto3"
 
 var (
 	file_nadzornaRavnina_proto_rawDescOnce sync.Once
@@ -414,10 +414,10 @@ var file_nadzornaRavnina_proto_depIdxs = []int32{
 	0, // 2: controlplane.SubscriptionNodeResponse.node:type_name -> controlplane.NodeInfo
 	6, // 3: controlplane.ControlPlane.GetClusterState:input_type -> google.protobuf.Empty
 	2, // 4: controlplane.ControlPlane.RegisterNode:input_type -> controlplane.RegisterNodeRequest
-	4, // 5: controlplane.ControlPlane.GetSubcscriptionNode:input_type -> controlplane.SubscriptionNodeRequest
+	4, // 5: controlplane.ControlPlane.GetSubscriptionNode:input_type -> controlplane.SubscriptionNodeRequest
 	1, // 6: controlplane.ControlPlane.GetClusterState:output_type -> controlplane.GetClusterStateResponse
 	3, // 7: controlplane.ControlPlane.RegisterNode:output_type -> controlplane.RegisterNodeResponse
-	5, // 8: controlplane.ControlPlane.GetSubcscriptionNode:output_type -> controlplane.SubscriptionNodeResponse
+	5, // 8: controlplane.ControlPlane.GetSubscriptionNode:output_type -> controlplane.SubscriptionNodeResponse
 	6, // [6:9] is the sub-list for method output_type
 	3, // [3:6] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name

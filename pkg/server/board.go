@@ -13,9 +13,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var nextUserId int64
-var nextTopicId int64
-var nextMessageId int64
+//naj gredo od 1 naprej, lazje uporabnikov, patch da subscribe vrne tudi prvi message (ker z 0 ni hotlo)
+var nextUserId int64 = 1
+var nextTopicId int64 = 1
+var nextMessageId int64 = 1
 
 type MessageBoardServer struct {
 	razpravljalnica.UnimplementedMessageBoardServer
@@ -354,49 +355,4 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 	// block to keep the stream open
 	select {}
 }
-
-// func (s *MessageBoardServer) GetSubcscriptionNode(
-// 	ctx context.Context,
-// 	req *razpravljalnica.SubscriptionNodeRequest,
-// ) (*razpravljalnica.SubscriptionNodeResponse, error) {
-
-// 	// 1. vprašaj control plane za stanje
-// 	state, err := s.control.GetClusterState(
-// 		ctx,
-// 		&emptypb.Empty{},
-// 	)
-// 	if err != nil {
-// 		return nil, status.Error(codes.Unavailable, "control plane unreachable")
-// 	}
-
-// 	nodes := []*razpravljalnica.NodeInfo{
-// 		state.Head,
-// 		state.Tail,
-// 	}
-
-// 	if len(nodes) == 0 {
-// 		return nil, status.Error(codes.Unavailable, "no nodes available")
-// 	}
-
-// 	// 2. deterministična izbira
-// 	sum := req.UserId
-// 	for _, t := range req.TopicId {
-// 		sum += t
-// 	}
-
-// 	node := nodes[sum%int64(len(nodes))]
-
-// 	// 3. token
-// 	token := fmt.Sprintf(
-// 		"%s:%d:%d",
-// 		node.NodeId,
-// 		req.UserId,
-// 		time.Now().Unix(),
-// 	)
-
-// 	return &razpravljalnica.SubscriptionNodeResponse{
-// 		SubscribeToken: token,
-// 		Node:           node,
-// 	}, nil
-// }
 
