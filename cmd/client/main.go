@@ -49,7 +49,7 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, controlAddr string) {
 	ctx := context.Background()
 
-	cpConn, err := grpc.Dial(controlAddr, grpc.WithInsecure())
+	cpConn, err := grpc.NewClient(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to control plane: %v", err)
 	}
@@ -67,7 +67,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 	}
 
 	// 2. Connect to the chosen message board node
-	subConn, err := grpc.Dial(subResp.Node.Address, grpc.WithInsecure())
+	subConn, err := grpc.NewClient(subResp.Node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("Failed to connect to subscription node: %v", err)
 		return
@@ -94,8 +94,8 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 				log.Printf("Subscription ended: %v", err)
 				return
 			}
-			fmt.Printf("[EVENT] %v | Topic %d | User %d (%s): %d (%s) (Likes: %d)\n",
-				ev.Op, ev.Message.TopicId, ev.Message.UserId, ev.Message.UserName, ev.Message.Id, ev.Message.Text, ev.Message.Likes)
+			fmt.Printf("[EVENT] %v | Topic %d (%s) | User %d (%s): %d (%s) (Likes: %d)\n",
+				ev.Op, ev.Message.TopicId, ev.Message.TopicName, ev.Message.UserId, ev.Message.UserName, ev.Message.Id, ev.Message.Text, ev.Message.Likes)
 		}
 	}()
 	fmt.Println("Subscription started in background")
@@ -163,7 +163,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("Interactive Razpravljalnica CLI")
-	log.Println("Commands:\n createtopic <name>,          post <topic_id> <text>,                update <topic_id> <msg_id> <text>,\n delete <topic_id> <msg_id>,  like <topic_id> <msg_id>,              listtopics,\n listmessages <topic_id>,     subscribe <fromMessageId> <topicId1,topicId2,...>,\n exit")
+	log.Println("Commands:\n createtopic <name>,          post <topic_id> <text>,         update <topic_id> <msg_id> <text>,\n delete <topic_id> <msg_id>,  like <topic_id> <msg_id>,       listtopics,\n listmessages <topic_id>,     subscribe <fromMessageId> <topicId1,topicId2,...>,\n exit")
 	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
 
 	currentUser, err := loginUser(headClient)
@@ -216,7 +216,6 @@ func main() {
 			text := fields[1]
 			msg, err := headClient.PostMessage(context.Background(), &razpravljalnica.PostMessageRequest{
 				UserId:   currentUser.Id,
-				UserName: currentUser.Name,
 				TopicId:  topicID,
 				Text:     text,
 			})
@@ -241,7 +240,6 @@ func main() {
 			text := fields[2]
 			msg, err := headClient.UpdateMessage(context.Background(), &razpravljalnica.UpdateMessageRequest{
 				UserId:    currentUser.Id,
-				UserName:  currentUser.Name,
 				TopicId:   topicID,
 				MessageId: msgID,
 				Text:      text,
@@ -266,7 +264,6 @@ func main() {
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
 			_, err := headClient.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
 				UserId:    currentUser.Id,
-				UserName:  currentUser.Name,
 				TopicId:   topicID,
 				MessageId: msgID,
 			})
@@ -290,7 +287,6 @@ func main() {
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
 			msg, err := headClient.LikeMessage(context.Background(), &razpravljalnica.LikeMessageRequest{
 				UserId:    currentUser.Id,
-				UserName: currentUser.Name,
 				TopicId:   topicID,
 				MessageId: msgID,
 			})
@@ -322,7 +318,7 @@ func main() {
 				continue
 			}
 			for _, m := range resp.Messages {
-				fmt.Printf("%d | User %d (%s) | %d (%s) | Likes: %d\n", m.Id, m.UserId, m.UserName, m.Id, m.Text, m.Likes)
+				fmt.Printf("%d (%s) | User %d (%s) | Message %d (%s) | Likes: %d\n", m.TopicId, m.TopicName, m.UserId, m.UserName, m.Id, m.Text, m.Likes)
 			}
 
 		//stara implementacija ni upoštevala možnosti, da poveš od katerega sporočila naprej boš subscriban -> torej koliko zgodovine mora prenesti

@@ -51,6 +51,12 @@ func (ns *NodeStorage) GetUserById(id int64) *razpravljalnica.User {
 	return ns.users[id] // assuming ns.users map[int64]*User
 }
 
+//dodano zato, da lahko dobivam topice iz topicId, ki jih imamo v message-ih
+func (ns *NodeStorage) GetTopicById(id int64) *razpravljalnica.Topic {
+	ns.mu.RLock()
+	defer ns.mu.RUnlock()
+	return ns.topics[id] // assuming ns.users map[int64]*User
+}
 
 // AddUser adds a new user
 func (s *NodeStorage) AddUser(u *razpravljalnica.User) {
@@ -141,7 +147,7 @@ func (s *NodeStorage) GetMessages(
 	// Collect eligible messages
 	messages := make([]*razpravljalnica.Message, 0, len(commentsByTopic))
 	for _, msg := range commentsByTopic {
-		if msg.Id > fromMessageId {
+		if msg.Id >= fromMessageId {
 			messages = append(messages, msg)
 		}
 	}

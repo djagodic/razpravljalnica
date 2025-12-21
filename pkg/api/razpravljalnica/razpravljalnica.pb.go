@@ -34,25 +34,25 @@ const (
 type OpType int32
 
 const (
-	OpType_OP_POST   OpType = 0 // add a message to a topic
-	OpType_OP_LIKE   OpType = 1 // like a message
-	OpType_OP_DELETE OpType = 2 // delete a message
-	OpType_OP_UPDATE OpType = 3 // update a message
+	OpType_POST   OpType = 0 // add a message to a topic
+	OpType_LIKE   OpType = 1 // like a message
+	OpType_DELETE OpType = 2 // delete a message
+	OpType_UPDATE OpType = 3 // update a message
 )
 
 // Enum value maps for OpType.
 var (
 	OpType_name = map[int32]string{
-		0: "OP_POST",
-		1: "OP_LIKE",
-		2: "OP_DELETE",
-		3: "OP_UPDATE",
+		0: "POST",
+		1: "LIKE",
+		2: "DELETE",
+		3: "UPDATE",
 	}
 	OpType_value = map[string]int32{
-		"OP_POST":   0,
-		"OP_LIKE":   1,
-		"OP_DELETE": 2,
-		"OP_UPDATE": 3,
+		"POST":   0,
+		"LIKE":   1,
+		"DELETE": 2,
+		"UPDATE": 3,
 	}
 )
 
@@ -188,15 +188,17 @@ func (x *Topic) GetName() string {
 	return ""
 }
 
+// Added topic_name and user_name za lepsi izpis
 type Message struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	TopicId       int64                  `protobuf:"varint,2,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserName      string                 `protobuf:"bytes,4,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"` // NEW
-	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	Likes         int32                  `protobuf:"varint,7,opt,name=likes,proto3" json:"likes,omitempty"`
+	TopicName     string                 `protobuf:"bytes,3,opt,name=topic_name,json=topicName,proto3" json:"topic_name,omitempty"` //NEW
+	UserId        int64                  `protobuf:"varint,4,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	UserName      string                 `protobuf:"bytes,5,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"` // NEW
+	Text          string                 `protobuf:"bytes,6,opt,name=text,proto3" json:"text,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Likes         int32                  `protobuf:"varint,8,opt,name=likes,proto3" json:"likes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -243,6 +245,13 @@ func (x *Message) GetTopicId() int64 {
 		return x.TopicId
 	}
 	return 0
+}
+
+func (x *Message) GetTopicName() string {
+	if x != nil {
+		return x.TopicName
+	}
+	return ""
 }
 
 func (x *Message) GetUserId() int64 {
@@ -484,8 +493,7 @@ type PostMessageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TopicId       int64                  `protobuf:"varint,1,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
 	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserName      string                 `protobuf:"bytes,3,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
-	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -534,13 +542,6 @@ func (x *PostMessageRequest) GetUserId() int64 {
 	return 0
 }
 
-func (x *PostMessageRequest) GetUserName() string {
-	if x != nil {
-		return x.UserName
-	}
-	return ""
-}
-
 func (x *PostMessageRequest) GetText() string {
 	if x != nil {
 		return x.Text
@@ -552,8 +553,7 @@ type DeleteMessageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TopicId       int64                  `protobuf:"varint,1,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
 	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserName      string                 `protobuf:"bytes,3,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
-	MessageId     int64                  `protobuf:"varint,4,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	MessageId     int64                  `protobuf:"varint,3,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -602,13 +602,6 @@ func (x *DeleteMessageRequest) GetUserId() int64 {
 	return 0
 }
 
-func (x *DeleteMessageRequest) GetUserName() string {
-	if x != nil {
-		return x.UserName
-	}
-	return ""
-}
-
 func (x *DeleteMessageRequest) GetMessageId() int64 {
 	if x != nil {
 		return x.MessageId
@@ -620,9 +613,8 @@ type UpdateMessageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TopicId       int64                  `protobuf:"varint,1,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
 	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserName      string                 `protobuf:"bytes,3,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
-	MessageId     int64                  `protobuf:"varint,4,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"` // new text
+	MessageId     int64                  `protobuf:"varint,3,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"` // new text
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -671,13 +663,6 @@ func (x *UpdateMessageRequest) GetUserId() int64 {
 	return 0
 }
 
-func (x *UpdateMessageRequest) GetUserName() string {
-	if x != nil {
-		return x.UserName
-	}
-	return ""
-}
-
 func (x *UpdateMessageRequest) GetMessageId() int64 {
 	if x != nil {
 		return x.MessageId
@@ -697,7 +682,6 @@ type LikeMessageRequest struct {
 	TopicId       int64                  `protobuf:"varint,1,opt,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
 	MessageId     int64                  `protobuf:"varint,2,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	UserId        int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // user who posted the like
-	UserName      string                 `protobuf:"bytes,4,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -751,13 +735,6 @@ func (x *LikeMessageRequest) GetUserId() int64 {
 		return x.UserId
 	}
 	return 0
-}
-
-func (x *LikeMessageRequest) GetUserName() string {
-	if x != nil {
-		return x.UserName
-	}
-	return ""
 }
 
 type ListTopicsResponse struct {
@@ -912,9 +889,8 @@ type SubscribeTopicRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TopicId        []int64                `protobuf:"varint,1,rep,packed,name=topic_id,json=topicId,proto3" json:"topic_id,omitempty"`
 	UserId         int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserName       string                 `protobuf:"bytes,3,opt,name=user_name,json=userName,proto3" json:"user_name,omitempty"`
-	FromMessageId  int64                  `protobuf:"varint,4,opt,name=from_message_id,json=fromMessageId,proto3" json:"from_message_id,omitempty"` // starting id of the message
-	SubscribeToken string                 `protobuf:"bytes,5,opt,name=subscribe_token,json=subscribeToken,proto3" json:"subscribe_token,omitempty"` // token generated by the head used to authorize the subscription
+	FromMessageId  int64                  `protobuf:"varint,3,opt,name=from_message_id,json=fromMessageId,proto3" json:"from_message_id,omitempty"` // starting id of the message
+	SubscribeToken string                 `protobuf:"bytes,4,opt,name=subscribe_token,json=subscribeToken,proto3" json:"subscribe_token,omitempty"` // token generated by the head used to authorize the subscription
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -961,13 +937,6 @@ func (x *SubscribeTopicRequest) GetUserId() int64 {
 		return x.UserId
 	}
 	return 0
-}
-
-func (x *SubscribeTopicRequest) GetUserName() string {
-	if x != nil {
-		return x.UserName
-	}
-	return ""
 }
 
 func (x *SubscribeTopicRequest) GetFromMessageId() int64 {
@@ -1035,7 +1004,7 @@ func (x *MessageEvent) GetOp() OpType {
 	if x != nil {
 		return x.Op
 	}
-	return OpType_OP_POST
+	return OpType_POST
 }
 
 func (x *MessageEvent) GetMessage() *Message {
@@ -1107,16 +1076,18 @@ const file_razpravljalnica_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"+\n" +
 	"\x05Topic\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"\xcf\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\xee\x01\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
-	"\btopic_id\x18\x02 \x01(\x03R\atopicId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\x03R\x06userId\x12\x1b\n" +
-	"\tuser_name\x18\x04 \x01(\tR\buserName\x12\x12\n" +
-	"\x04text\x18\x05 \x01(\tR\x04text\x129\n" +
+	"\btopic_id\x18\x02 \x01(\x03R\atopicId\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
-	"\x05likes\x18\a \x01(\x05R\x05likes\"Y\n" +
+	"topic_name\x18\x03 \x01(\tR\ttopicName\x12\x17\n" +
+	"\auser_id\x18\x04 \x01(\x03R\x06userId\x12\x1b\n" +
+	"\tuser_name\x18\x05 \x01(\tR\buserName\x12\x12\n" +
+	"\x04text\x18\x06 \x01(\tR\x04text\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
+	"\x05likes\x18\b \x01(\x05R\x05likes\"Y\n" +
 	"\x04Like\x12\x19\n" +
 	"\btopic_id\x18\x01 \x01(\x03R\atopicId\x12\x1d\n" +
 	"\n" +
@@ -1128,31 +1099,27 @@ const file_razpravljalnica_proto_rawDesc = "" +
 	"\x11CreateUserRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"(\n" +
 	"\x12CreateTopicRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"y\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"\\\n" +
 	"\x12PostMessageRequest\x12\x19\n" +
 	"\btopic_id\x18\x01 \x01(\x03R\atopicId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1b\n" +
-	"\tuser_name\x18\x03 \x01(\tR\buserName\x12\x12\n" +
-	"\x04text\x18\x04 \x01(\tR\x04text\"\x86\x01\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\"i\n" +
 	"\x14DeleteMessageRequest\x12\x19\n" +
 	"\btopic_id\x18\x01 \x01(\x03R\atopicId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1b\n" +
-	"\tuser_name\x18\x03 \x01(\tR\buserName\x12\x1d\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x04 \x01(\x03R\tmessageId\"\x9a\x01\n" +
+	"message_id\x18\x03 \x01(\x03R\tmessageId\"}\n" +
 	"\x14UpdateMessageRequest\x12\x19\n" +
 	"\btopic_id\x18\x01 \x01(\x03R\atopicId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1b\n" +
-	"\tuser_name\x18\x03 \x01(\tR\buserName\x12\x1d\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x04 \x01(\x03R\tmessageId\x12\x12\n" +
-	"\x04text\x18\x05 \x01(\tR\x04text\"\x84\x01\n" +
+	"message_id\x18\x03 \x01(\x03R\tmessageId\x12\x12\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\"g\n" +
 	"\x12LikeMessageRequest\x12\x19\n" +
 	"\btopic_id\x18\x01 \x01(\x03R\atopicId\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x02 \x01(\x03R\tmessageId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\x03R\x06userId\x12\x1b\n" +
-	"\tuser_name\x18\x04 \x01(\tR\buserName\"D\n" +
+	"\auser_id\x18\x03 \x01(\x03R\x06userId\"D\n" +
 	"\x12ListTopicsResponse\x12.\n" +
 	"\x06topics\x18\x01 \x03(\v2\x16.razpravljalnica.TopicR\x06topics\"m\n" +
 	"\x12GetMessagesRequest\x12\x19\n" +
@@ -1160,25 +1127,26 @@ const file_razpravljalnica_proto_rawDesc = "" +
 	"\x0ffrom_message_id\x18\x02 \x01(\x03R\rfromMessageId\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\"K\n" +
 	"\x13GetMessagesResponse\x124\n" +
-	"\bmessages\x18\x01 \x03(\v2\x18.razpravljalnica.MessageR\bmessages\"\xb9\x01\n" +
+	"\bmessages\x18\x01 \x03(\v2\x18.razpravljalnica.MessageR\bmessages\"\x9c\x01\n" +
 	"\x15SubscribeTopicRequest\x12\x19\n" +
 	"\btopic_id\x18\x01 \x03(\x03R\atopicId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1b\n" +
-	"\tuser_name\x18\x03 \x01(\tR\buserName\x12&\n" +
-	"\x0ffrom_message_id\x18\x04 \x01(\x03R\rfromMessageId\x12'\n" +
-	"\x0fsubscribe_token\x18\x05 \x01(\tR\x0esubscribeToken\"\xcb\x01\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12&\n" +
+	"\x0ffrom_message_id\x18\x03 \x01(\x03R\rfromMessageId\x12'\n" +
+	"\x0fsubscribe_token\x18\x04 \x01(\tR\x0esubscribeToken\"\xcb\x01\n" +
 	"\fMessageEvent\x12'\n" +
 	"\x0fsequence_number\x18\x01 \x01(\x03R\x0esequenceNumber\x12'\n" +
 	"\x02op\x18\x02 \x01(\x0e2\x17.razpravljalnica.OpTypeR\x02op\x122\n" +
 	"\amessage\x18\x03 \x01(\v2\x18.razpravljalnica.MessageR\amessage\x125\n" +
 	"\bevent_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\aeventAt\"$\n" +
 	"\x0eGetUserRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name*@\n" +
-	"\x06OpType\x12\v\n" +
-	"\aOP_POST\x10\x00\x12\v\n" +
-	"\aOP_LIKE\x10\x01\x12\r\n" +
-	"\tOP_DELETE\x10\x02\x12\r\n" +
-	"\tOP_UPDATE\x10\x032\xa4\x06\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name*4\n" +
+	"\x06OpType\x12\b\n" +
+	"\x04POST\x10\x00\x12\b\n" +
+	"\x04LIKE\x10\x01\x12\n" +
+	"\n" +
+	"\x06DELETE\x10\x02\x12\n" +
+	"\n" +
+	"\x06UPDATE\x10\x032\xa4\x06\n" +
 	"\fMessageBoard\x12G\n" +
 	"\n" +
 	"CreateUser\x12\".razpravljalnica.CreateUserRequest\x1a\x15.razpravljalnica.User\x12J\n" +

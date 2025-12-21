@@ -43,6 +43,10 @@ const (
 // MessageBoardClient is the client API for MessageBoard service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// //////////////////////////////////////////////////////////////////////////////
+// Data plane
+// //////////////////////////////////////////////////////////////////////////////
 type MessageBoardClient interface {
 	// Creates a new user and assigns it an id
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*User, error)
@@ -186,6 +190,10 @@ type MessageBoard_SubscribeTopicClient = grpc.ServerStreamingClient[MessageEvent
 // MessageBoardServer is the server API for MessageBoard service.
 // All implementations must embed UnimplementedMessageBoardServer
 // for forward compatibility.
+//
+// //////////////////////////////////////////////////////////////////////////////
+// Data plane
+// //////////////////////////////////////////////////////////////////////////////
 type MessageBoardServer interface {
 	// Creates a new user and assigns it an id
 	CreateUser(context.Context, *CreateUserRequest) (*User, error)

@@ -117,6 +117,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	message := &razpravljalnica.Message{
 		Id:        nextMessageId,
 		TopicId:   req.TopicId,
+		TopicName: s.storage.GetTopicById(req.TopicId).Name,
 		UserId:    req.UserId,
 		UserName:  s.storage.GetUserById(req.UserId).Name,
 		Text:      req.Text,
@@ -142,9 +143,9 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	}
 
 	// broadcast to local subscribers
-	go s.broadcastToSubscribers(message, razpravljalnica.OpType_OP_POST)
+	go s.broadcastToSubscribers(message, razpravljalnica.OpType_POST)
 
-	log.Printf("postMessage -> %d (%s) at topic %d by user %d (%s)", message.Id, message.Text, message.TopicId, message.UserId, message.UserName)
+	log.Printf("postMessage -> %d (%s) at topic %d (%s) by user %d (%s)", message.Id, message.Text, message.TopicId,message.TopicName, message.UserId, message.UserName)
 	return message, nil
 }
 
@@ -192,6 +193,7 @@ func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, 
 			Message: &razpravljalnica.Message{
 				Id:        c.Id,
 				TopicId:   c.TopicId,
+				TopicName: c.TopicName,
 				UserId:    c.UserId,
 				UserName:  c.UserName,
 				Text:      c.Text,
@@ -238,12 +240,13 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 		//go s.ReplicateEntry(entry)
 	}
 
-	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_UPDATE)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_UPDATE)
 
-	log.Printf("updateMessage -> %d (%s) at %d by %d (%s) to \"%s\"", comment.Id, temp, comment.TopicId, comment.UserId, comment.UserName, comment.Text)
+	log.Printf("updateMessage -> %d (%s) at %d (%s) by %d (%s) to \"%s\"", comment.Id, temp, comment.TopicId, comment.TopicName, comment.UserId, comment.UserName, comment.Text)
 	return &razpravljalnica.Message{
 		Id:        comment.Id,
 		TopicId:   comment.TopicId,
+		TopicName: comment.TopicName,
 		UserId:    comment.UserId,
 		UserName:  comment.UserName,
 		Text:      comment.Text,
@@ -262,6 +265,8 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 		return nil, errors.New("user not authorized to delete this message")
 	}
 
+	temp := comment.Text
+
 	if err := s.storage.DeleteMessage(req.TopicId, req.MessageId, req.UserId); err != nil {
 		return nil, err
 	}
@@ -276,9 +281,9 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 		//go s.ReplicateEntry(entry)
 	}
 
-	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_DELETE)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_DELETE)
 
-	log.Printf("deleteMessage -> %d at %d deleted by %d (%s)", req.MessageId, req.TopicId, req.UserId, req.UserName)
+	log.Printf("deleteMessage -> %d (%s) at %d (%s) deleted by %d (%s)", req.MessageId, temp, req.TopicId, comment.TopicName, req.UserId, comment.UserName)
 	return &emptypb.Empty{}, nil
 }
 
@@ -288,6 +293,8 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 	if err != nil {
 		return nil, err
 	}
+
+	temp := comment.Text
 
 	entry := &LogEntry{
 		Op:       OpLikeMessage,
@@ -299,12 +306,13 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 		//go s.ReplicateEntry(entry)
 	}
 
-	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_LIKE)
+	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_LIKE)
 
-	log.Printf("likeMessage -> %d at %d liked by %d (%s)", req.MessageId, req.TopicId, req.UserId, req.UserName)
+	log.Printf("likeMessage -> %d (%s) at %d (%s) liked by %d (%s)", req.MessageId, temp, req.TopicId, comment.TopicName, req.UserId, comment.UserName)
 	return &razpravljalnica.Message{
 		Id:        comment.Id,
 		TopicId:   comment.TopicId,
+		TopicName: comment.TopicName,
 		UserId:    comment.UserId,
 		UserName:  comment.UserName,
 		Text:      comment.Text,
@@ -340,6 +348,7 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalni
 		apiMessages = append(apiMessages, &razpravljalnica.Message{
 			Id:        m.Id,
 			TopicId:   m.TopicId,
+			TopicName: m.TopicName,
 			UserId:    m.UserId,
 			UserName:  m.UserName,
 			Text:      m.Text,
@@ -348,7 +357,7 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalni
 		})
 	}
 
-	log.Printf("getMessages -> at topic %d from %d limit %d", req.TopicId, req.FromMessageId, req.Limit)
+	log.Printf("getMessages -> at topic %d (%s) from id %d limit %d", req.TopicId, s.storage.GetTopicById(req.TopicId).Name, req.FromMessageId, req.Limit)
 	return &razpravljalnica.GetMessagesResponse{Messages: apiMessages}, nil
 }
 
@@ -369,10 +378,11 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 		for _, m := range msgs {
 			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),
-				Op:             razpravljalnica.OpType_OP_POST,
+				Op:             razpravljalnica.OpType_POST,
 				Message: &razpravljalnica.Message{
 					Id:        m.Id,
 					TopicId:   m.TopicId,
+					TopicName: m.TopicName,
 					UserId:    m.UserId,
 					UserName:  m.UserName,
 					Text:      m.Text,
