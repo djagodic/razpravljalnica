@@ -15,6 +15,25 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// ------------------------ StartHeartbeat ------------------------
+func startHeartbeat(cpAddr, nodeID string) {
+	conn, err := grpc.NewClient(cpAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("heartbeat dial failed: %v", err)
+	}
+	client := control.NewControlPlaneClient(conn)
+
+	ticker := time.NewTicker(2 * time.Second)
+	for range ticker.C {
+		_, err := client.Heartbeat(context.Background(), &control.HeartbeatRequest{NodeId: nodeID})
+		if err != nil {
+			log.Printf("heartbeat failed: %v", err)
+		}
+	}
+}
+
+
+
 func main() {
 	addr := flag.String("addr", ":50051", "server address")
 	addrControl := flag.String("addrControl", "localhost:5000", "control plane address")
@@ -42,7 +61,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("RegisterNode RPC failed: %v", err)
 	}
-
+	
 	//preverimo response
 	if resp.Success {
 		log.Printf("Node registered successfully: %s\n", resp.Message)
@@ -53,6 +72,8 @@ func main() {
 	//glede na response doloci head in tail
 	isHead := &resp.IsHead
 	isTail := &resp.IsTail
+
+	go startHeartbeat(*addrControl, *nodeID)
 
 	//naredimo nov grpc strezik
 	s := grpc.NewServer()

@@ -9,6 +9,8 @@ import (
 
 	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -75,7 +77,7 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 		LastHB:  time.Now(),
 	}
 	c.nodes = append(c.nodes, node)
-	c.nodeMap[req.Address] = node
+	c.nodeMap[req.NodeId] = node
 	log.Printf("registered node: %s (%s)", req.NodeId, req.Address)
 
 	//doloci head in tail
@@ -111,30 +113,75 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 	log.Printf("deregistered node: %s", nodeID)
 }
 
+//Old implementation -> ohranil za rezervo
+// func (c *ControlPlaneServer) Heartbeat(nodeID string) {
+// 	c.mu.Lock()
+// 	defer c.mu.Unlock()
+// 	if n, ok := c.nodeMap[nodeID]; ok {
+// 		n.LastHB = time.Now()
+// 		n.Alive = true
+// 	}
+// }
+
 // Heartbeat updates last seen timestamp
-func (c *ControlPlaneServer) Heartbeat(nodeID string) {
+func (c *ControlPlaneServer) Heartbeat(ctx context.Context,	req *nadzorna_ravnina.HeartbeatRequest) (*emptypb.Empty, error) {
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if n, ok := c.nodeMap[nodeID]; ok {
-		n.LastHB = time.Now()
-		n.Alive = true
+
+	n, ok := c.nodeMap[req.NodeId]
+	if !ok {
+		log.Printf("heartbeat from unknown node %s", req.NodeId)
+		return &emptypb.Empty{}, nil
 	}
+
+	n.LastHB = time.Now()
+	n.Alive = true
+
+	return &emptypb.Empty{}, nil
 }
+
+
+//Old implementation -> ohranil za rezervo
+// func (c *ControlPlaneServer) monitorNodes() {
+// 	ticker := time.NewTicker(c.interval)
+// 	for range ticker.C {
+// 		c.mu.Lock()
+// 		for _, n := range c.nodes {
+// 			if time.Since(n.LastHB) > 2*c.interval {
+// 				if n.Alive {
+// 					n.Alive = false
+// 					log.Printf("node %s (address: %s) marked as dead", n.NodeID, n.Address)
+// 					c.reconfigureChain(n.NodeID)
+// 				}
+// 			}
+// 		}
+// 		c.mu.Unlock()
+// 	}
+// }
 
 // Periodic health check to detect dead nodes
 func (c *ControlPlaneServer) monitorNodes() {
 	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
 	for range ticker.C {
 		c.mu.Lock()
+
+		now := time.Now()
 		for _, n := range c.nodes {
-			if time.Since(n.LastHB) > 2*c.interval {
-				if n.Alive {
-					n.Alive = false
-					log.Printf("node %s (address: %s) marked as dead", n.NodeID, n.Address)
-					c.reconfigureChain(n.NodeID)
-				}
+			if !n.Alive {
+				continue
 			}
+			if now.Sub(n.LastHB) > 2*c.interval {
+				n.Alive = false
+				log.Printf("node %s marked DEAD", n.NodeID)
+				c.reconfigureChain(n.NodeID)
+			}
+
+			//log.Printf("node %s heartbeat successful", n.NodeID)
 		}
+
 		c.mu.Unlock()
 	}
 }
@@ -167,24 +214,67 @@ func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Emp
 	}, nil
 }
 
+// func (c *ControlPlaneServer) GetSubscriptionNodes(ctx context.Context, req *nadzorna_ravnina.SubscriptionNodeRequest) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
+
+// 	c.mu.RLock()
+// 	defer c.mu.RUnlock()
+
+// 	//TODO preveri ce je 0 serverjev online in vrni da ni mogoce dodeliti serverja za subscribe
+// 	// if len(c.nodes) == 0 {
+// 	// 	return nil, status.Error(codes.Unavailable, "no nodes available")
+// 	// }
+
+// 	// Deterministic selection
+// 	sum := req.UserId
+// 	for _, t := range req.TopicId {
+// 		sum += t
+// 	}
+
+// 	idx := sum % int64(len(c.nodes))
+// 	node := c.nodes[idx]
+
+// 	token := fmt.Sprintf(
+// 		"%s:%d:%d",
+// 		node.NodeID,
+// 		req.UserId,
+// 		time.Now().Unix(),
+// 	)
+
+// 	return &nadzorna_ravnina.SubscriptionNodeResponse{
+// 		SubscribeToken: token,
+// 		Node: &nadzorna_ravnina.NodeInfo{
+// 			NodeId:  node.NodeID,
+// 			Address: node.Address,
+// 		},
+// 	}, nil
+// }
+
 func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzorna_ravnina.SubscriptionNodeRequest) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	//TODO preveri ce je 0 serverjev online in vrni da ni mogoce dodeliti serverja za subscribe
-	// if len(c.nodes) == 0 {
-	// 	return nil, status.Error(codes.Unavailable, "no nodes available")
-	// }
+	var alive []*NodeInfo
+	for _, n := range c.nodes {
+		if n.Alive {
+			alive = append(alive, n)
+		}
+	}
 
-	// Deterministic selection
+	if len(alive) == 0 {
+		return nil, status.Error(
+			codes.Unavailable,
+			"no alive nodes available",
+		)
+	}
+
 	sum := req.UserId
 	for _, t := range req.TopicId {
 		sum += t
 	}
 
-	idx := sum % int64(len(c.nodes))
-	node := c.nodes[idx]
+	idx := sum % int64(len(alive))
+	node := alive[idx]
 
 	token := fmt.Sprintf(
 		"%s:%d:%d",
@@ -201,6 +291,7 @@ func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzo
 		},
 	}, nil
 }
+
 
 
 // Start launches monitoring loop

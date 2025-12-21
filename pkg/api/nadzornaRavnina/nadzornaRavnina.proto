@@ -44,12 +44,18 @@ message SubscriptionNodeResponse {
   NodeInfo node = 2;
 }
 
+message HeartbeatRequest {
+  string node_id = 1;
+}
+
 // ControlPlane service
 service ControlPlane {
     // Returns current head and tail of the cluster
     rpc GetClusterState(google.protobuf.Empty) returns (GetClusterStateResponse);
     // Register a new node
     rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
-      // Request a node to which a subscription can be opened.
+    // Request a node to which a subscription can be opened.
     rpc GetSubscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
+    // Check if servers are alive or down
+    rpc Heartbeat(HeartbeatRequest) returns (google.protobuf.Empty);
 }

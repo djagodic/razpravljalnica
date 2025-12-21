@@ -408,4 +408,3 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 	// block to keep the stream open
 	select {}
 }
-

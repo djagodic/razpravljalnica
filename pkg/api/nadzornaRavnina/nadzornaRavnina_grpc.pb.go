@@ -25,6 +25,7 @@ const (
 	ControlPlane_GetClusterState_FullMethodName     = "/controlplane.ControlPlane/GetClusterState"
 	ControlPlane_RegisterNode_FullMethodName        = "/controlplane.ControlPlane/RegisterNode"
 	ControlPlane_GetSubscriptionNode_FullMethodName = "/controlplane.ControlPlane/GetSubscriptionNode"
+	ControlPlane_Heartbeat_FullMethodName           = "/controlplane.ControlPlane/Heartbeat"
 )
 
 // ControlPlaneClient is the client API for ControlPlane service.
@@ -39,6 +40,8 @@ type ControlPlaneClient interface {
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
 	// Request a node to which a subscription can be opened.
 	GetSubscriptionNode(ctx context.Context, in *SubscriptionNodeRequest, opts ...grpc.CallOption) (*SubscriptionNodeResponse, error)
+	// Check if servers are alive or down
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type controlPlaneClient struct {
@@ -79,6 +82,16 @@ func (c *controlPlaneClient) GetSubscriptionNode(ctx context.Context, in *Subscr
 	return out, nil
 }
 
+func (c *controlPlaneClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, ControlPlane_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlPlaneServer is the server API for ControlPlane service.
 // All implementations must embed UnimplementedControlPlaneServer
 // for forward compatibility.
@@ -91,6 +104,8 @@ type ControlPlaneServer interface {
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
 	// Request a node to which a subscription can be opened.
 	GetSubscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error)
+	// Check if servers are alive or down
+	Heartbeat(context.Context, *HeartbeatRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedControlPlaneServer()
 }
 
@@ -109,6 +124,9 @@ func (UnimplementedControlPlaneServer) RegisterNode(context.Context, *RegisterNo
 }
 func (UnimplementedControlPlaneServer) GetSubscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSubscriptionNode not implemented")
+}
+func (UnimplementedControlPlaneServer) Heartbeat(context.Context, *HeartbeatRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
 func (UnimplementedControlPlaneServer) mustEmbedUnimplementedControlPlaneServer() {}
 func (UnimplementedControlPlaneServer) testEmbeddedByValue()                      {}
@@ -185,6 +203,24 @@ func _ControlPlane_GetSubscriptionNode_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlane_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlane_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlPlane_ServiceDesc is the grpc.ServiceDesc for ControlPlane service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -203,6 +239,10 @@ var ControlPlane_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSubscriptionNode",
 			Handler:    _ControlPlane_GetSubscriptionNode_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _ControlPlane_Heartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

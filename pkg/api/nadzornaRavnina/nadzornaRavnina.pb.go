@@ -356,6 +356,50 @@ func (x *SubscriptionNodeResponse) GetNode() *NodeInfo {
 	return nil
 }
 
+type HeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatRequest) Reset() {
+	*x = HeartbeatRequest{}
+	mi := &file_nadzornaRavnina_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatRequest) ProtoMessage() {}
+
+func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nadzornaRavnina_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_nadzornaRavnina_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *HeartbeatRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
 var File_nadzornaRavnina_proto protoreflect.FileDescriptor
 
 const file_nadzornaRavnina_proto_rawDesc = "" +
@@ -380,11 +424,14 @@ const file_nadzornaRavnina_proto_rawDesc = "" +
 	"\btopic_id\x18\x02 \x03(\x03R\atopicId\"o\n" +
 	"\x18SubscriptionNodeResponse\x12'\n" +
 	"\x0fsubscribe_token\x18\x01 \x01(\tR\x0esubscribeToken\x12*\n" +
-	"\x04node\x18\x02 \x01(\v2\x16.controlplane.NodeInfoR\x04node2\x9d\x02\n" +
+	"\x04node\x18\x02 \x01(\v2\x16.controlplane.NodeInfoR\x04node\"+\n" +
+	"\x10HeartbeatRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId2\xe2\x02\n" +
 	"\fControlPlane\x12P\n" +
 	"\x0fGetClusterState\x12\x16.google.protobuf.Empty\x1a%.controlplane.GetClusterStateResponse\x12U\n" +
 	"\fRegisterNode\x12!.controlplane.RegisterNodeRequest\x1a\".controlplane.RegisterNodeResponse\x12d\n" +
-	"\x13GetSubscriptionNode\x12%.controlplane.SubscriptionNodeRequest\x1a&.controlplane.SubscriptionNodeResponseB\x1aZ\x18pkg/api/nadzorna_ravninab\x06proto3"
+	"\x13GetSubscriptionNode\x12%.controlplane.SubscriptionNodeRequest\x1a&.controlplane.SubscriptionNodeResponse\x12C\n" +
+	"\tHeartbeat\x12\x1e.controlplane.HeartbeatRequest\x1a\x16.google.protobuf.EmptyB\x1aZ\x18pkg/api/nadzorna_ravninab\x06proto3"
 
 var (
 	file_nadzornaRavnina_proto_rawDescOnce sync.Once
@@ -398,7 +445,7 @@ func file_nadzornaRavnina_proto_rawDescGZIP() []byte {
 	return file_nadzornaRavnina_proto_rawDescData
 }
 
-var file_nadzornaRavnina_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_nadzornaRavnina_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_nadzornaRavnina_proto_goTypes = []any{
 	(*NodeInfo)(nil),                 // 0: controlplane.NodeInfo
 	(*GetClusterStateResponse)(nil),  // 1: controlplane.GetClusterStateResponse
@@ -406,20 +453,23 @@ var file_nadzornaRavnina_proto_goTypes = []any{
 	(*RegisterNodeResponse)(nil),     // 3: controlplane.RegisterNodeResponse
 	(*SubscriptionNodeRequest)(nil),  // 4: controlplane.SubscriptionNodeRequest
 	(*SubscriptionNodeResponse)(nil), // 5: controlplane.SubscriptionNodeResponse
-	(*emptypb.Empty)(nil),            // 6: google.protobuf.Empty
+	(*HeartbeatRequest)(nil),         // 6: controlplane.HeartbeatRequest
+	(*emptypb.Empty)(nil),            // 7: google.protobuf.Empty
 }
 var file_nadzornaRavnina_proto_depIdxs = []int32{
 	0, // 0: controlplane.GetClusterStateResponse.head:type_name -> controlplane.NodeInfo
 	0, // 1: controlplane.GetClusterStateResponse.tail:type_name -> controlplane.NodeInfo
 	0, // 2: controlplane.SubscriptionNodeResponse.node:type_name -> controlplane.NodeInfo
-	6, // 3: controlplane.ControlPlane.GetClusterState:input_type -> google.protobuf.Empty
+	7, // 3: controlplane.ControlPlane.GetClusterState:input_type -> google.protobuf.Empty
 	2, // 4: controlplane.ControlPlane.RegisterNode:input_type -> controlplane.RegisterNodeRequest
 	4, // 5: controlplane.ControlPlane.GetSubscriptionNode:input_type -> controlplane.SubscriptionNodeRequest
-	1, // 6: controlplane.ControlPlane.GetClusterState:output_type -> controlplane.GetClusterStateResponse
-	3, // 7: controlplane.ControlPlane.RegisterNode:output_type -> controlplane.RegisterNodeResponse
-	5, // 8: controlplane.ControlPlane.GetSubscriptionNode:output_type -> controlplane.SubscriptionNodeResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
+	6, // 6: controlplane.ControlPlane.Heartbeat:input_type -> controlplane.HeartbeatRequest
+	1, // 7: controlplane.ControlPlane.GetClusterState:output_type -> controlplane.GetClusterStateResponse
+	3, // 8: controlplane.ControlPlane.RegisterNode:output_type -> controlplane.RegisterNodeResponse
+	5, // 9: controlplane.ControlPlane.GetSubscriptionNode:output_type -> controlplane.SubscriptionNodeResponse
+	7, // 10: controlplane.ControlPlane.Heartbeat:output_type -> google.protobuf.Empty
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -436,7 +486,7 @@ func file_nadzornaRavnina_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nadzornaRavnina_proto_rawDesc), len(file_nadzornaRavnina_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

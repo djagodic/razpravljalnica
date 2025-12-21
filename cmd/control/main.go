@@ -36,7 +36,7 @@ func main() {
 	nadzorna_ravnina.RegisterControlPlaneServer(grpcServer, controlPlane)
 
 	// 6. Zagon monitoringa
-	//controlPlane.Start()
+	go controlPlane.Start()
 
 	log.Printf("Control Plane running on %s", addr)
 
