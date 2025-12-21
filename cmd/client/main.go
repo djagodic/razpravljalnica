@@ -46,7 +46,7 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 }
 
 
-func startSubscribe(userID int64, topicIDs []int64, controlAddr string) {
+func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, controlAddr string) {
 	ctx := context.Background()
 
 	cpConn, err := grpc.Dial(controlAddr, grpc.WithInsecure())
@@ -78,7 +78,7 @@ func startSubscribe(userID int64, topicIDs []int64, controlAddr string) {
 	stream, err := subClient.SubscribeTopic(ctx, &razpravljalnica.SubscribeTopicRequest{
 		UserId:         userID,
 		TopicId:        topicIDs,
-		FromMessageId:  0,
+		FromMessageId:  fromMessagesId,
 		SubscribeToken: subResp.SubscribeToken,
 	})
 	if err != nil {
@@ -94,8 +94,8 @@ func startSubscribe(userID int64, topicIDs []int64, controlAddr string) {
 				log.Printf("Subscription ended: %v", err)
 				return
 			}
-			fmt.Printf("[EVENT] %v | Topic %d | User %d: %s (Likes: %d)\n",
-				ev.Op, ev.Message.TopicId, ev.Message.UserId, ev.Message.Text, ev.Message.Likes)
+			fmt.Printf("[EVENT] %v | Topic %d | User %d (%s): %d (%s) (Likes: %d)\n",
+				ev.Op, ev.Message.TopicId, ev.Message.UserId, ev.Message.UserName, ev.Message.Id, ev.Message.Text, ev.Message.Likes)
 		}
 	}()
 	fmt.Println("Subscription started in background")
@@ -163,7 +163,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("Interactive Razpravljalnica CLI")
-	log.Println("Commands: createtopic <name>, post <topic_id> <text>, update <topic_id> <msg_id> <text>, delete <topic_id> <msg_id>, like <topic_id> <msg_id>, listtopics, listmessages <topic_id>, subscribe <topic_id1,topic_id2,...>, exit")
+	log.Println("Commands:\n createtopic <name>,          post <topic_id> <text>,                update <topic_id> <msg_id> <text>,\n delete <topic_id> <msg_id>,  like <topic_id> <msg_id>,              listtopics,\n listmessages <topic_id>,     subscribe <fromMessageId> <topicId1,topicId2,...>,\n exit")
 	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
 
 	currentUser, err := loginUser(headClient)
@@ -215,9 +215,10 @@ func main() {
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			text := fields[1]
 			msg, err := headClient.PostMessage(context.Background(), &razpravljalnica.PostMessageRequest{
-				UserId:  currentUser.Id,
-				TopicId: topicID,
-				Text:    text,
+				UserId:   currentUser.Id,
+				UserName: currentUser.Name,
+				TopicId:  topicID,
+				Text:     text,
 			})
 			if err != nil {
 				fmt.Println("Error posting message:", err)
@@ -240,6 +241,7 @@ func main() {
 			text := fields[2]
 			msg, err := headClient.UpdateMessage(context.Background(), &razpravljalnica.UpdateMessageRequest{
 				UserId:    currentUser.Id,
+				UserName:  currentUser.Name,
 				TopicId:   topicID,
 				MessageId: msgID,
 				Text:      text,
@@ -264,6 +266,7 @@ func main() {
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
 			_, err := headClient.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
 				UserId:    currentUser.Id,
+				UserName:  currentUser.Name,
 				TopicId:   topicID,
 				MessageId: msgID,
 			})
@@ -287,6 +290,7 @@ func main() {
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
 			msg, err := headClient.LikeMessage(context.Background(), &razpravljalnica.LikeMessageRequest{
 				UserId:    currentUser.Id,
+				UserName: currentUser.Name,
 				TopicId:   topicID,
 				MessageId: msgID,
 			})
@@ -294,7 +298,7 @@ func main() {
 				fmt.Println("Error liking message:", err)
 				continue
 			}
-			fmt.Printf("Message liked: %d | Likes: %d\n", msg.Id, msg.Likes)
+			fmt.Printf("Message liked: %d (%s)| Likes: %d\n", msg.Id, msg.Text, msg.Likes)
 
 		case "listtopics":
 			resp, err := tailClient.ListTopics(context.Background(), &emptypb.Empty{})
@@ -318,21 +322,80 @@ func main() {
 				continue
 			}
 			for _, m := range resp.Messages {
-				fmt.Printf("%d | User %d | %s | Likes: %d\n", m.Id, m.UserId, m.Text, m.Likes)
+				fmt.Printf("%d | User %d (%s) | %d (%s) | Likes: %d\n", m.Id, m.UserId, m.UserName, m.Id, m.Text, m.Likes)
 			}
+
+		//stara implementacija ni upoštevala možnosti, da poveš od katerega sporočila naprej boš subscriban -> torej koliko zgodovine mora prenesti
+		// case "subscribeOriginal":
+		// 	if currentUser == nil {
+		// 		fmt.Println("No user, please createuser first")
+		// 		continue
+		// 	}
+		// 	// Expect format: <fromMessageId> <topicId1,topicId2,...>
+		// 	fields := strings.Fields(args)
+		// 	if len(fields) < 2 {
+		// 		fmt.Println("Usage: subscribe <fromMessageId> <topicId1,topicId2,...>")
+		// 		continue
+		// 	}
+
+		// 	fromMessageId, err := strconv.ParseInt(fields[0], 10, 64)
+		// 	if err != nil {
+		// 		fmt.Println("Invalid fromMessageId:", err)
+		// 		continue
+		// 	}
+		// 	idStrs := strings.Split(args, ",")
+		// 	var topicIDs []int64
+		// 	for _, s := range idStrs {
+		// 		id, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+		// 		topicIDs = append(topicIDs, id)
+		// 	}
+		// 	fmt.Printf("from: %d, topic: %d", fromMessageId, topicIDs[0])
+		// 	startSubscribe(currentUser.Id, topicIDs, fromMessageId, *controlAddr)
 
 		case "subscribe":
 			if currentUser == nil {
 				fmt.Println("No user, please createuser first")
 				continue
 			}
-			idStrs := strings.Split(args, ",")
+
+			// Expect format: <fromMessageId> <topicId1,topicId2,...>
+			fields := strings.Fields(args)
+			if len(fields) < 2 {
+				fmt.Println("Usage: subscribe <fromMessageId> <topicId1,topicId2,...>")
+				continue
+			}
+
+			// parse fromMessageId
+			fromMessageId, err := strconv.ParseInt(fields[0], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid fromMessageId:", err)
+				continue
+			}
+
+			// parse topic IDs
+			topicList := strings.Join(fields[1:], " ")   // join back the rest in case user typed spaces
+			idStrs := strings.Split(topicList, ",")      // split by comma
 			var topicIDs []int64
 			for _, s := range idStrs {
-				id, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+				s = strings.TrimSpace(s)
+				if s == "" {
+					continue
+				}
+				id, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					fmt.Println("Invalid topic ID:", err)
+					continue
+				}
 				topicIDs = append(topicIDs, id)
 			}
-			startSubscribe(currentUser.Id, topicIDs, *controlAddr)
+
+			if len(topicIDs) == 0 {
+				fmt.Println("No valid topic IDs provided")
+				continue
+			}
+
+			startSubscribe(currentUser.Id, topicIDs, fromMessageId, *controlAddr)
+
 
 		default:
 			fmt.Println("Unknown command")

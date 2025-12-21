@@ -118,6 +118,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 		Id:        nextMessageId,
 		TopicId:   req.TopicId,
 		UserId:    req.UserId,
+		UserName:  s.storage.GetUserById(req.UserId).Name,
 		Text:      req.Text,
 		CreatedAt: timestamppb.New(time.Now()),
 		Likes:     0,
@@ -143,35 +144,70 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	// broadcast to local subscribers
 	go s.broadcastToSubscribers(message, razpravljalnica.OpType_OP_POST)
 
-	log.Printf("postMessage -> %d (%s) at topic %d by user %d", message.Id, message.Text, message.TopicId, message.UserId)
+	log.Printf("postMessage -> %d (%s) at topic %d by user %d (%s)", message.Id, message.Text, message.TopicId, message.UserId, message.UserName)
 	return message, nil
 }
 
 // helper
+// func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, op razpravljalnica.OpType) {
+// 	for _, userSubs := range s.subs {
+// 		for _, ch := range userSubs {
+// 			ev := &razpravljalnica.MessageEvent{
+// 				SequenceNumber: s.nextSequence(),
+// 				Op:             op,
+// 				Message: &razpravljalnica.Message{
+// 					Id:        c.Id,
+// 					TopicId:   c.TopicId,
+// 					UserId:    c.UserId,
+// 					UserName:  c.UserName,
+// 					Text:      c.Text,
+// 					CreatedAt: c.CreatedAt,
+// 					Likes:     c.Likes,
+// 				},
+// 				EventAt: timestamppb.New(time.Now()),
+// 			}
+// 			select {
+// 			case ch <- ev:
+// 			default:
+// 				// drop if subscriber is slow
+// 			}
+// 		}
+// 	}
+// }
+
 func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, op razpravljalnica.OpType) {
-	for _, userSubs := range s.subs {
-		for _, ch := range userSubs {
-			ev := &razpravljalnica.MessageEvent{
-				SequenceNumber: s.nextSequence(),
-				Op:             op,
-				Message: &razpravljalnica.Message{
-					Id:        c.Id,
-					TopicId:   c.TopicId,
-					UserId:    c.UserId,
-					Text:      c.Text,
-					CreatedAt: c.CreatedAt,
-					Likes:     c.Likes,
-				},
-				EventAt: timestamppb.New(time.Now()),
-			}
-			select {
-			case ch <- ev:
-			default:
-				// drop if subscriber is slow
-			}
+	topicIDStr := fmt.Sprint(c.TopicId)
+
+	// get subscribers only for this topic
+	userSubs, ok := s.subs[topicIDStr]
+	if !ok {
+		// no subscribers for this topic
+		return
+	}
+
+	for _, ch := range userSubs {
+		ev := &razpravljalnica.MessageEvent{
+			SequenceNumber: s.nextSequence(),
+			Op:             op,
+			Message: &razpravljalnica.Message{
+				Id:        c.Id,
+				TopicId:   c.TopicId,
+				UserId:    c.UserId,
+				UserName:  c.UserName,
+				Text:      c.Text,
+				CreatedAt: c.CreatedAt,
+				Likes:     c.Likes,
+			},
+			EventAt: timestamppb.New(time.Now()),
+		}
+		select {
+		case ch <- ev:
+		default:
+			// drop if subscriber is slow
 		}
 	}
 }
+
 
 // ------------------------ UpdateMessage -------------------------
 func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljalnica.UpdateMessageRequest) (*razpravljalnica.Message, error) {
@@ -182,6 +218,9 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 	if comment.UserId != req.UserId {
 		return nil, errors.New("user not authorized to update this message")
 	}
+
+	//added for debuging, da vidim kateri je star message pri izpisu, preden se posodobi
+	temp := comment.Text
 
 	comment.Text = req.Text
 	comment.CreatedAt = timestamppb.New(time.Now())
@@ -201,11 +240,12 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_UPDATE)
 
-	log.Printf("updateMessage -> %d at %d by %d to \"%s\"", comment.Id, comment.TopicId, comment.UserId, comment.Text)
+	log.Printf("updateMessage -> %d (%s) at %d by %d (%s) to \"%s\"", comment.Id, temp, comment.TopicId, comment.UserId, comment.UserName, comment.Text)
 	return &razpravljalnica.Message{
 		Id:        comment.Id,
 		TopicId:   comment.TopicId,
 		UserId:    comment.UserId,
+		UserName:  comment.UserName,
 		Text:      comment.Text,
 		CreatedAt: comment.CreatedAt,
 		Likes:     comment.Likes,
@@ -238,7 +278,7 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_DELETE)
 
-	log.Printf("deleteMessage -> %d at %d deleted by %d", req.MessageId, req.TopicId, req.UserId)
+	log.Printf("deleteMessage -> %d at %d deleted by %d (%s)", req.MessageId, req.TopicId, req.UserId, req.UserName)
 	return &emptypb.Empty{}, nil
 }
 
@@ -261,11 +301,12 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_OP_LIKE)
 
-	log.Printf("likeMessage -> %d at %d liked by %d", req.MessageId, req.TopicId, req.UserId)
+	log.Printf("likeMessage -> %d at %d liked by %d (%s)", req.MessageId, req.TopicId, req.UserId, req.UserName)
 	return &razpravljalnica.Message{
 		Id:        comment.Id,
 		TopicId:   comment.TopicId,
 		UserId:    comment.UserId,
+		UserName:  comment.UserName,
 		Text:      comment.Text,
 		CreatedAt: comment.CreatedAt,
 		Likes:     comment.Likes,
@@ -300,6 +341,7 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalni
 			Id:        m.Id,
 			TopicId:   m.TopicId,
 			UserId:    m.UserId,
+			UserName:  m.UserName,
 			Text:      m.Text,
 			CreatedAt: m.CreatedAt,
 			Likes:     m.Likes,
@@ -332,6 +374,7 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 					Id:        m.Id,
 					TopicId:   m.TopicId,
 					UserId:    m.UserId,
+					UserName:  m.UserName,
 					Text:      m.Text,
 					CreatedAt: m.CreatedAt,
 					Likes:     m.Likes,

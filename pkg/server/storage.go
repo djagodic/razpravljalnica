@@ -44,6 +44,14 @@ func (s *NodeStorage) GetUserByName(name string) *razpravljalnica.User {
 	return nil
 }
 
+//dodano zato, da lahko dobivam imena iz userId, ki jih imamo v message-ih
+func (ns *NodeStorage) GetUserById(id int64) *razpravljalnica.User {
+	ns.mu.RLock()
+	defer ns.mu.RUnlock()
+	return ns.users[id] // assuming ns.users map[int64]*User
+}
+
+
 // AddUser adds a new user
 func (s *NodeStorage) AddUser(u *razpravljalnica.User) {
 	s.mu.Lock()

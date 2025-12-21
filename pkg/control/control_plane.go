@@ -130,7 +130,7 @@ func (c *ControlPlaneServer) monitorNodes() {
 			if time.Since(n.LastHB) > 2*c.interval {
 				if n.Alive {
 					n.Alive = false
-					log.Printf("node %s (%s) marked as dead", n.NodeID, n.Address)
+					log.Printf("node %s (address: %s) marked as dead", n.NodeID, n.Address)
 					c.reconfigureChain(n.NodeID)
 				}
 			}
