@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	control "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"github.com/djagodic/razpravljalnica/pkg/server"
 	"google.golang.org/grpc"
@@ -21,11 +21,11 @@ func startHeartbeat(cpAddr, nodeID string) {
 	if err != nil {
 		log.Fatalf("heartbeat dial failed: %v", err)
 	}
-	client := control.NewControlPlaneClient(conn)
+	client := nadzorna_ravnina.NewControlPlaneClient(conn)
 
 	ticker := time.NewTicker(2 * time.Second)
 	for range ticker.C {
-		_, err := client.Heartbeat(context.Background(), &control.HeartbeatRequest{NodeId: nodeID})
+		_, err := client.Heartbeat(context.Background(), &nadzorna_ravnina.HeartbeatRequest{NodeId: nodeID})
 		if err != nil {
 			log.Printf("heartbeat failed: %v", err)
 		}
@@ -47,12 +47,12 @@ func main() {
 		panic(err)
 	}
 	defer conn.Close()
-	ctrlClient := control.NewControlPlaneClient(conn)
+	ctrlClient := nadzorna_ravnina.NewControlPlaneClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	//naredimo Register node request
-	req := &control.RegisterNodeRequest{
+	req := &nadzorna_ravnina.RegisterNodeRequest{
 		NodeId:  *nodeID,
 		Address: *addr,
 	}

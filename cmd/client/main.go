@@ -12,20 +12,20 @@ import (
 	"strings"
 	"time"
 
-	control "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func getClusterState(controlAddr string) (*control.NodeInfo, *control.NodeInfo, error) {
+func getClusterState(controlAddr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
 	conn, err := grpc.NewClient(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
 	}
 	defer conn.Close()
-	ctrlClient := control.NewControlPlaneClient(conn)
+	ctrlClient := nadzorna_ravnina.NewControlPlaneClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -54,10 +54,10 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 		log.Fatalf("Failed to connect to control plane: %v", err)
 	}
 	defer cpConn.Close()
-	cpClient := control.NewControlPlaneClient(cpConn)
+	cpClient := nadzorna_ravnina.NewControlPlaneClient(cpConn)
 
 	// 1. Ask the control plane which node to subscribe to
-	subResp, err := cpClient.GetSubscriptionNode(ctx, &control.SubscriptionNodeRequest{
+	subResp, err := cpClient.GetSubscriptionNode(ctx, &nadzorna_ravnina.SubscriptionNodeRequest{
 		UserId:  userID,
 		TopicId: topicIDs,
 	})
