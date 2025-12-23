@@ -44,6 +44,7 @@ func NewControlPlaneServer() *ControlPlaneServer {
 }
 
 // RegisterNode adds a new node to the chain (called by node at startup)
+// TODO uredi da register node tudi vrne podatke, ki jih mora dati nov node v bazo!
 func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_ravnina.RegisterNodeRequest) (*nadzorna_ravnina.RegisterNodeResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -60,6 +61,7 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 			if idx == len(c.nodes)-1 {
 				isTail = true
 			}
+
 			return &nadzorna_ravnina.RegisterNodeResponse{
 				Success: false,
 				Message: "node already registered",
