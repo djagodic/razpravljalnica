@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -22,6 +24,7 @@ var nextMessageId int64 = 1
 
 type MessageBoardServer struct {
 	razpravljalnica.UnimplementedMessageBoardServer
+	mu sync.RWMutex
 
 	storage *NodeStorage
 	log     *ReplicationLog
@@ -54,13 +57,53 @@ func (s *MessageBoardServer) nextSequence() int64 {
 	return atomic.AddInt64(&s.seq, 1)
 }
 
-func (s *MessageBoardServer) ConnectToNextNode(address string) razpravljalnica.MessageBoardClient{
+func (s *MessageBoardServer) StartSubscribingChanges(nodeId, controlAddr string) {
+    ctx := context.Background()
+
+    // Connect to control plane
+    cpConn, err := grpc.Dial(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatalf("Failed to connect to control plane: %v", err)
+    }
+
+    cpClient := nadzorna_ravnina.NewControlPlaneClient(cpConn)
+
+    // Subscribe to changes
+    stream, err := cpClient.SubscribeToChanges(ctx, &nadzorna_ravnina.SubscribeToChangesRequest{NodeId: nodeId})
+    if err != nil {
+        log.Printf("Stream failed: %v", err)
+        return
+    }
+
+    log.Println("Streaming started in background")
+
+    // Listen for events in background
+    go func() {
+        for {
+            ev, err := stream.Recv()
+            if err != nil {
+                log.Printf("Control plane ended stream: %v", err)
+                return
+            }
+
+            log.Printf("Next node address received: %s", ev.NextAdress)
+
+            s.connectToNextNode(ev.NextAdress)
+        }
+    }()
+}
+
+
+//povezi se na naslednji server v verigi
+func (s *MessageBoardServer) connectToNextNode(address string) razpravljalnica.MessageBoardClient{
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
 	}
+	s.mu.RLock()
 	s.nextNode = razpravljalnica.NewMessageBoardClient(conn)
 	s.IsTail = false
+	s.mu.RUnlock()
 	return razpravljalnica.NewMessageBoardClient(conn)
 }
 
@@ -119,7 +162,8 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	if !s.IsTail {
+	//replikacija
+	if s.nextNode != nil {
 		_, err := s.nextNode.CreateTopic(ctx, req)
 		if err != nil {
 				fmt.Print("Error creating topic:", err)
@@ -156,8 +200,14 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
-	if s.IsHead {
-		//go s.ReplicateEntry(entry)
+
+	//replikacija
+	if s.nextNode != nil {
+	_, err := s.nextNode.PostMessage(ctx, req)
+	if err != nil {
+			fmt.Print("Error creating topic:", err)
+			fmt.Printf("CurrentNode: %s", s.nodeId)
+		}
 	}
 
 	// broadcast to local subscribers
@@ -228,8 +278,15 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
-	if s.IsHead {
-		//go s.ReplicateEntry(entry)
+
+	//replikacija
+	if s.nextNode != nil {
+
+	_, err := s.nextNode.UpdateMessage(ctx, req)
+	if err != nil {
+			fmt.Print("Error creating topic:", err)
+			fmt.Printf("CurrentNode: %s", s.nodeId)
+		}
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_UPDATE)
@@ -269,8 +326,14 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
-	if s.IsHead {
-		//go s.ReplicateEntry(entry)
+
+	//replikacija
+	if s.nextNode != nil {
+		_, err := s.nextNode.DeleteMessage(ctx, req)
+		if err != nil {
+				fmt.Print("Error creating topic:", err)
+				fmt.Printf("CurrentNode: %s", s.nodeId)
+			}
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_DELETE)
@@ -294,9 +357,14 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
-	if s.IsHead {
-		//s.LikeMessage(req)
 
+	//replikacija
+	if s.nextNode != nil {
+	_, err := s.nextNode.LikeMessage(ctx, req)
+	if err != nil {
+			fmt.Print("Error creating topic:", err)
+			fmt.Printf("CurrentNode: %s", s.nodeId)
+		}
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_LIKE)

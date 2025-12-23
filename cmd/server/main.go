@@ -15,6 +15,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+
+
 // ------------------------ StartHeartbeat ------------------------
 func startHeartbeat(cpAddr, nodeID string) {
 	conn, err := grpc.NewClient(cpAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -84,6 +86,9 @@ func main() {
 
 	//strezenje metod na board povezemo s streznikom s
 	razpravljalnica.RegisterMessageBoardServer(s, board)
+
+	//odpri stream in poslušaj za spremembe s strani nadzorne ravnine
+	board.StartSubscribingChanges(*nodeID, *addrControl)
 
 	// izpišemo ime strežnika
 	hostName, err := os.Hostname()
