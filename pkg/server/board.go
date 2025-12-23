@@ -127,8 +127,13 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
-	if s.IsHead {
-		//go s.ReplicateEntry(entry)
+
+	if s.nextNode != nil {
+		_, err := s.nextNode.CreateUser(ctx, req)
+		if err != nil {
+			fmt.Print("Error creating user:", err)
+			fmt.Printf("CurrentNode: %s", s.nodeId)
+		}
 	}
 
 	log.Printf("createUser -> %d (%s)", user.Id, user.Name)
@@ -166,6 +171,16 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 }
 
 func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalnica.PostMessageRequest) (*razpravljalnica.Message, error) {
+	topic := s.storage.GetTopicById(req.TopicId)
+	if topic == nil {
+		return nil, fmt.Errorf("topic %d not found", req.TopicId)
+	}
+
+	user := s.storage.GetUserById(req.UserId)
+	if user == nil {
+		return nil, fmt.Errorf("user %d not found", req.UserId)
+	}
+
 	message := &razpravljalnica.Message{
 		Id:        nextMessageId,
 		TopicId:   req.TopicId,
