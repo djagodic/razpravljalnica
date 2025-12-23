@@ -88,7 +88,7 @@ func main() {
 	razpravljalnica.RegisterMessageBoardServer(s, board)
 
 	//odpri stream in poslušaj za spremembe s strani nadzorne ravnine
-	go board.StartSubscribingChanges(*nodeID, *addrControl)
+	board.StartSubscribingChanges(*nodeID, *addrControl)
 
 	// izpišemo ime strežnika
 	hostName, err := os.Hostname()
