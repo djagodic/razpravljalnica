@@ -36,9 +36,10 @@ type NodeInfo struct {
 // NewControlPlaneServer creates a new control plane instance
 func NewControlPlaneServer() *ControlPlaneServer {
 	return &ControlPlaneServer{
-		nodes:    []*NodeInfo{},
-		nodeMap:  make(map[string]*NodeInfo),
-		interval: 5 * time.Second, // heartbeat interval
+		nodes:        []*NodeInfo{},
+		nodeMap:      make(map[string]*NodeInfo),
+		interval:     5 * time.Second, // heartbeat interval
+		subToChanges: make(map[string]chan *nadzorna_ravnina.Changes),
 	}
 }
 
@@ -144,7 +145,7 @@ func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnin
 
 	n, ok := c.nodeMap[req.NodeId]
 	if !ok {
-		//log.Printf("heartbeat from unknown node %s", req.NodeId)
+		log.Printf("heartbeat from unknown node %s", req.NodeId)
 		return &emptypb.Empty{}, nil
 	}
 
@@ -191,7 +192,7 @@ func (c *ControlPlaneServer) monitorNodes() {
 				c.reconfigureChain(n.NodeID)
 			}
 
-			log.Printf("node %s heartbeat successful", n.NodeID)
+			//log.Printf("node %s heartbeat successful", n.NodeID)
 		}
 
 		c.mu.Unlock()
@@ -300,7 +301,7 @@ func (s *ControlPlaneServer) sendChanges() error {
 }
 
 // grpc SiuubscribeToChanges
-func (s *ControlPlaneServer) SubscribeTopic(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
+func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
 	s.subToChanges[req.NodeId] = ch
 
