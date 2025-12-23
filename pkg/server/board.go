@@ -87,10 +87,21 @@ func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient n
 
 // povezi se na naslednji server v verigi
 func (s *MessageBoardServer) connectToNextNode(address string) {
+	//ce pride posebno sporocilo gremo in nastavimo novi head node -> namesto posebne funkcije uporabimo kar tole
+	if address == "NewHead1234" {
+		//s.mu.Lock()
+		s.IsHead = true
+		//s.mu.Unlock()
+		log.Printf("Nastavilu smo nov head node, stanje Head: %b", s.IsHead)
+		return
+	}
+
 	//povezavo na nil naredimo tako da je address prazen string -> postanemo rep
 	if address == "" {
+		//s.mu.Lock()
 		s.nextNode = nil
 		s.IsTail = true
+		//s.mu.Unlock()
 		log.Printf("Povezali na nov node: 'nil, stanje Tail: %b", s.IsTail)
 		return
 	}
@@ -99,7 +110,7 @@ func (s *MessageBoardServer) connectToNextNode(address string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
 	}
-	s.mu.RLock()
+	//s.mu.Lock()
 	s.nextNode = razpravljalnica.NewMessageBoardClient(conn)
 
 	//dolocimo tail
@@ -107,7 +118,7 @@ func (s *MessageBoardServer) connectToNextNode(address string) {
 
 	log.Printf("Povezali na nov node: %s, stanje Tail: %b", address, s.IsTail)
 
-	s.mu.RUnlock()
+	//s.mu.Unlock()
 }
 
 // ------------------------ gRPC methods -----------------------------
@@ -141,8 +152,13 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 	}
 	s.log.Add(entry)
 
-	if s.nextNode != nil {
-		_, err := s.nextNode.CreateUser(ctx, req)
+	//repllikacija + zaklep branja
+	//s.mu.RLock()
+	next := s.nextNode
+	//s.mu.RUnlock()
+
+	if next != nil {
+		_, err := next.CreateUser(ctx, req)
 		if err != nil {
 			fmt.Print("Error creating user:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
@@ -170,9 +186,13 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	//replikacija
-	if s.nextNode != nil {
-		_, err := s.nextNode.CreateTopic(ctx, req)
+	//replikacija + zaklep branja
+	//s.mu.RLock()
+	next := s.nextNode
+	//s.mu.RUnlock()
+
+	if next != nil {
+		_, err := next.CreateTopic(ctx, req)
 		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
@@ -219,9 +239,13 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	//replikacija
-	if s.nextNode != nil {
-		_, err := s.nextNode.PostMessage(ctx, req)
+	//replikacija + zaklep branja
+	//s.mu.RLock()
+	next := s.nextNode
+	//s.mu.RUnlock()
+
+	if next != nil {
+		_, err := next.PostMessage(ctx, req)
 		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
@@ -297,10 +321,13 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 	}
 	s.log.Add(entry)
 
-	//replikacija
-	if s.nextNode != nil {
+	//replikacija + zaklep branja
+	//s.mu.RLock()
+	next := s.nextNode
+	//s.mu.RUnlock()
 
-		_, err := s.nextNode.UpdateMessage(ctx, req)
+	if next != nil {
+		_, err := next.UpdateMessage(ctx, req)
 		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
@@ -345,9 +372,13 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 	}
 	s.log.Add(entry)
 
-	//replikacija
-	if s.nextNode != nil {
-		_, err := s.nextNode.DeleteMessage(ctx, req)
+	//replikacija + zaklep branja
+	//s.mu.RLock()
+	next := s.nextNode
+	//s.mu.RUnlock()
+
+	if next != nil {
+		_, err := next.DeleteMessage(ctx, req)
 		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
@@ -376,9 +407,13 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	//replikacija
-	if s.nextNode != nil {
-		_, err := s.nextNode.LikeMessage(ctx, req)
+	//replikacija + zaklep branja
+	//s.mu.RLock()
+	next := s.nextNode
+	//s.mu.RUnlock()
+
+	if next != nil {
+		_, err := next.LikeMessage(ctx, req)
 		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)

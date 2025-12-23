@@ -96,7 +96,7 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 		zadnji := c.nodes[len(c.nodes)-1]
 		//posljemu prejsnjemu repu obvestilo o novem repu
 		//TODO poslati to se clientom
-		err := c.sendChanges(predzadnji, zadnji)
+		err := c.sendChanges(predzadnji, zadnji, false)
 		if err != nil {
 			return &nadzorna_ravnina.RegisterNodeResponse{
 				Success: false,
@@ -136,12 +136,13 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 		if n.NodeID == nodeID {
 			if i != 0 && i != len(c.nodes)-1 { //ce ni bil prvi in je za njim bil se en, moramo sprociti predhodniku o spremembi
 				fmt.Printf("DEBUG: poslal sendchanges v %s in %s\n", c.nodes[i-1].NodeID, c.nodes[i+1].NodeID)
-				c.sendChanges(c.nodes[i-1], c.nodes[i+1])
+				c.sendChanges(c.nodes[i-1], c.nodes[i+1], false)
 			} else if i != 0 && i == len(c.nodes)-1 { //ce ni prvi, ampak je zadnji
 				fmt.Printf("DEBUG: poslal sendchanges v %s in 'nil'\n", c.nodes[i-1].NodeID)
-				c.sendChanges(c.nodes[i-1], nil)
+				c.sendChanges(c.nodes[i-1], nil, false)
 			} else if i == 0 { //ce odpove head
-				//TODO obvestimo cliente
+				//TODO obvestimo cliente -> NE, client bo sam sel na controlplane ponovno in vzel nov naslov heada
+				c.sendChanges(c.nodes[i+1], nil, true)
 				fmt.Printf("DEBUG: odppovedal head: todo\n")
 			}
 			//izbrisemo iz verige
@@ -152,6 +153,7 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 	}
 
 	//TODO razporedimo njegove subscriberje na druga vozlisca
+	//David: vprasal sem Davorja in je rekel, da ce povezava pade bo pac client sou se enkrat vprasat na control plane kam se mora na novo subscribat
 	log.Printf("deregistered node: %s", nodeID)
 }
 
@@ -192,7 +194,7 @@ func (c *ControlPlaneServer) monitorNodes() {
 				c.reconfigureChain(n.NodeID)
 			}
 
-			//log.Printf("node %s heartbeat successful", n.NodeID)
+			log.Printf("node %s heartbeat successful", n.NodeID)
 		}
 
 		c.mu.Unlock()
@@ -276,18 +278,30 @@ func (c *ControlPlaneServer) Start() {
 }
 
 // send changes to subscribers -> poslji trenutnemu obvestilo o novem naslednjem
-func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo) error {
+func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHead bool) error {
 	var change *nadzorna_ravnina.Changes
 	if naslednji == nil {
-		//ce hocemo nastaviti naslednjega na nil bomo poslali prazen string
-		change = &nadzorna_ravnina.Changes{NextAdress: ""}
+		if isNewHead {
+			change = &nadzorna_ravnina.Changes{NextAdress: "NewHead1234"}
+		} else {
+			//ce hocemo nastaviti naslednjega na nil bomo poslali prazen string
+			change = &nadzorna_ravnina.Changes{NextAdress: ""}
+		}
+
 	} else {
 		//sporocilo o spremembi
 		change = &nadzorna_ravnina.Changes{NextAdress: naslednji.Address}
 	}
 
-	//pridobimo kanal predzadnjega
-	ch := s.subToChanges[trenuten.NodeID]
+	//pridobimo kanal predzadnjega, dodana bralna ključavnica
+	//s.mu.RLock()
+    ch := s.subToChanges[trenuten.NodeID]
+    //s.mu.RUnlock()
+
+	//chatko shit, pomoje nepotrebno
+    if ch == nil {
+        return nil
+    }
 
 	select {
 	case ch <- change:
@@ -301,7 +315,20 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo) error {
 // grpc SiuubscribeToChanges
 func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
-	s.subToChanges[req.NodeId] = ch
+	
+	//dodal sem zaklepanje med nastavljanjem channela za nextNode
+	//s.mu.Lock()
+    s.subToChanges[req.NodeId] = ch
+    //s.mu.Unlock()
+
+	//ko bo vse skupaj crashnilo zbrišem kanal
+    // defer func() {
+    //     s.mu.Lock()
+    //     delete(s.subToChanges, req.NodeId)
+    //     close(ch)
+    //     s.mu.Unlock()
+    // }()
+
 
 	//stream new messages
 	go func(ch chan *nadzorna_ravnina.Changes) {

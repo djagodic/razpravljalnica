@@ -154,9 +154,9 @@ func main() {
 
 	//connectaj v head in tail
 	headClient, connHead := connectToNode(head.Address)
-	tailClient, connClient := connectToNode(tail.Address)
-	defer connHead.Close()
-	defer connClient.Close()
+	// tailClient, connClient := connectToNode(tail.Address)
+	//defer connHead.Close()
+	//defer connClient.Close()
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -168,6 +168,7 @@ func main() {
 	for err != nil {
 		currentUser, err = loginUser(headClient)
 	}
+	connHead.Close()
 
 	for {
 		fmt.Print("> ")
@@ -183,6 +184,11 @@ func main() {
 			args = parts[1]
 		}
 
+		head, tail, err := getClusterState(*controlAddr)
+		if err != nil {
+			log.Fatalf("Failed to get cluster state: %v", err)
+		}
+
 		switch cmd {
 		case "exit":
 			fmt.Println("Exiting CLI")
@@ -193,12 +199,14 @@ func main() {
 				fmt.Println("Usage: createtopic <name>")
 				continue
 			}
+			headClient, connHead := connectToNode(head.Address)
 			t, err := headClient.CreateTopic(context.Background(), &razpravljalnica.CreateTopicRequest{Name: args})
 			if err != nil {
 				fmt.Println("Error creating topic:", err)
 				continue
 			}
 			fmt.Printf("Created topic: %d %s\n", t.Id, t.Name)
+			connHead.Close()
 
 		case "post":
 			if currentUser == nil {
@@ -212,6 +220,7 @@ func main() {
 			}
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			text := fields[1]
+			headClient, connHead := connectToNode(head.Address)
 			msg, err := headClient.PostMessage(context.Background(), &razpravljalnica.PostMessageRequest{
 				UserId:  currentUser.Id,
 				TopicId: topicID,
@@ -222,6 +231,7 @@ func main() {
 				continue
 			}
 			fmt.Printf("Posted message: %d | %s\n", msg.Id, msg.Text)
+			connHead.Close()
 
 		case "update":
 			if currentUser == nil {
@@ -236,6 +246,7 @@ func main() {
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
 			text := fields[2]
+			headClient, connHead := connectToNode(head.Address)
 			msg, err := headClient.UpdateMessage(context.Background(), &razpravljalnica.UpdateMessageRequest{
 				UserId:    currentUser.Id,
 				TopicId:   topicID,
@@ -247,6 +258,7 @@ func main() {
 				continue
 			}
 			fmt.Printf("Updated message: %d | %s\n", msg.Id, msg.Text)
+			connHead.Close()
 
 		case "delete":
 			if currentUser == nil {
@@ -260,6 +272,7 @@ func main() {
 			}
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
+			headClient, connHead := connectToNode(head.Address)
 			_, err := headClient.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
 				UserId:    currentUser.Id,
 				TopicId:   topicID,
@@ -270,6 +283,7 @@ func main() {
 				continue
 			}
 			fmt.Println("Message deleted")
+			connHead.Close()
 
 		case "like":
 			if currentUser == nil {
@@ -283,6 +297,7 @@ func main() {
 			}
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			msgID, _ := strconv.ParseInt(fields[1], 10, 64)
+			headClient, connHead := connectToNode(head.Address)
 			msg, err := headClient.LikeMessage(context.Background(), &razpravljalnica.LikeMessageRequest{
 				UserId:    currentUser.Id,
 				TopicId:   topicID,
@@ -293,8 +308,10 @@ func main() {
 				continue
 			}
 			fmt.Printf("Message liked: %d (%s)| Likes: %d\n", msg.Id, msg.Text, msg.Likes)
+			connHead.Close()
 
 		case "listtopics":
+			tailClient, connClient := connectToNode(tail.Address)
 			resp, err := tailClient.ListTopics(context.Background(), &emptypb.Empty{})
 			if err != nil {
 				fmt.Println("Error listing topics:", err)
@@ -303,9 +320,11 @@ func main() {
 			for _, t := range resp.Topics {
 				fmt.Printf("%d | %s\n", t.Id, t.Name)
 			}
+			connClient.Close()
 
 		case "listmessages":
 			topicID, _ := strconv.ParseInt(args, 10, 64)
+			tailClient, connClient := connectToNode(tail.Address)
 			resp, err := tailClient.GetMessages(context.Background(), &razpravljalnica.GetMessagesRequest{
 				TopicId:       topicID,
 				FromMessageId: 0,
@@ -318,6 +337,7 @@ func main() {
 			for _, m := range resp.Messages {
 				fmt.Printf("%d (%s) | User %d (%s) | Message %d (%s) | Likes: %d\n", m.TopicId, m.TopicName, m.UserId, m.UserName, m.Id, m.Text, m.Likes)
 			}
+			connClient.Close()
 
 		case "subscribe":
 			if currentUser == nil {

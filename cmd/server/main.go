@@ -86,7 +86,7 @@ func main() {
 	razpravljalnica.RegisterMessageBoardServer(s, board)
 
 	//odpri stream in poslušaj za spremembe s strani nadzorne ravnine
-	//TODO spremeni da klices preko ctrlclient ki je ze odprt zgoraj
+	//TODO spremeni da klices preko ctrlclient ki je ze odprt zgoraj -> done by Jaka
 	board.StartSubscribingChanges(*nodeID, ctrlClient)
 
 	// izpišemo ime strežnika
