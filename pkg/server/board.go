@@ -42,13 +42,13 @@ type MessageBoardServer struct {
 
 func NewMessageBoardServer(nodeId string, isHead, isTail bool) *MessageBoardServer {
 	return &MessageBoardServer{
-		storage: NewNodeStorage(),
-		log:     NewReplicationLog(),
-		nodeId:  nodeId,
-		IsHead:  isHead,
-		IsTail:  isTail,
+		storage:  NewNodeStorage(),
+		log:      NewReplicationLog(),
+		nodeId:   nodeId,
+		IsHead:   isHead,
+		IsTail:   isTail,
 		nextNode: nil,
-		subs:    make(map[string]map[string]chan *razpravljalnica.MessageEvent),
+		subs:     make(map[string]map[string]chan *razpravljalnica.MessageEvent),
 	}
 }
 
@@ -57,45 +57,36 @@ func (s *MessageBoardServer) nextSequence() int64 {
 	return atomic.AddInt64(&s.seq, 1)
 }
 
-func (s *MessageBoardServer) StartSubscribingChanges(nodeId, controlAddr string) {
-    ctx := context.Background()
+func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient nadzorna_ravnina.ControlPlaneClient) {
+	ctx := context.Background()
 
-    // Connect to control plane
-    cpConn, err := grpc.Dial(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-    if err != nil {
-        log.Fatalf("Failed to connect to control plane: %v", err)
-    }
+	// Subscribe to changes
+	stream, err := ctrlClient.SubscribeToChanges(ctx, &nadzorna_ravnina.SubscribeToChangesRequest{NodeId: nodeId})
+	if err != nil {
+		log.Printf("Stream failed: %v", err)
+		return
+	}
 
-    cpClient := nadzorna_ravnina.NewControlPlaneClient(cpConn)
+	log.Println("Streaming started in background")
 
-    // Subscribe to changes
-    stream, err := cpClient.SubscribeToChanges(ctx, &nadzorna_ravnina.SubscribeToChangesRequest{NodeId: nodeId})
-    if err != nil {
-        log.Printf("Stream failed: %v", err)
-        return
-    }
+	// Listen for events in background
+	go func() {
+		for {
+			ev, err := stream.Recv()
+			if err != nil {
+				log.Printf("Control plane ended stream: %v", err)
+				return
+			}
 
-    log.Println("Streaming started in background")
+			log.Printf("Next node address received: %s", ev.NextAdress)
 
-    // Listen for events in background
-    go func() {
-        for {
-            ev, err := stream.Recv()
-            if err != nil {
-                log.Printf("Control plane ended stream: %v", err)
-                return
-            }
-
-            log.Printf("Next node address received: %s", ev.NextAdress)
-
-            s.connectToNextNode(ev.NextAdress)
-        }
-    }()
+			s.connectToNextNode(ev.NextAdress)
+		}
+	}()
 }
 
-
-//povezi se na naslednji server v verigi
-func (s *MessageBoardServer) connectToNextNode(address string) razpravljalnica.MessageBoardClient{
+// povezi se na naslednji server v verigi
+func (s *MessageBoardServer) connectToNextNode(address string) razpravljalnica.MessageBoardClient {
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
@@ -166,9 +157,9 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	if s.nextNode != nil {
 		_, err := s.nextNode.CreateTopic(ctx, req)
 		if err != nil {
-				fmt.Print("Error creating topic:", err)
-				fmt.Printf("CurrentNode: %s", s.nodeId)
-			}
+			fmt.Print("Error creating topic:", err)
+			fmt.Printf("CurrentNode: %s", s.nodeId)
+		}
 	}
 
 	log.Printf("createTopic -> %d (%s)", topic.Id, topic.Name)
@@ -203,8 +194,8 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 
 	//replikacija
 	if s.nextNode != nil {
-	_, err := s.nextNode.PostMessage(ctx, req)
-	if err != nil {
+		_, err := s.nextNode.PostMessage(ctx, req)
+		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
@@ -282,8 +273,8 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 	//replikacija
 	if s.nextNode != nil {
 
-	_, err := s.nextNode.UpdateMessage(ctx, req)
-	if err != nil {
+		_, err := s.nextNode.UpdateMessage(ctx, req)
+		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
@@ -331,9 +322,9 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 	if s.nextNode != nil {
 		_, err := s.nextNode.DeleteMessage(ctx, req)
 		if err != nil {
-				fmt.Print("Error creating topic:", err)
-				fmt.Printf("CurrentNode: %s", s.nodeId)
-			}
+			fmt.Print("Error creating topic:", err)
+			fmt.Printf("CurrentNode: %s", s.nodeId)
+		}
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_DELETE)
@@ -360,8 +351,8 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 
 	//replikacija
 	if s.nextNode != nil {
-	_, err := s.nextNode.LikeMessage(ctx, req)
-	if err != nil {
+		_, err := s.nextNode.LikeMessage(ctx, req)
+		if err != nil {
 			fmt.Print("Error creating topic:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
