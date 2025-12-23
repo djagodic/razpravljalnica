@@ -1,5 +1,5 @@
 // V rootu projekta
-// protoc -I=./pkg/api/razpravljalnica  --go_out=paths=source_relative:./pkg/api/razpravljalnica  --go-grpc_out=paths=source_relative:./pkg/api/razpravljalnica  pkg/api/razpravljalnica/razpravljalnica.proto
+// protoc -I ./pkg/api/razpravljalnica  --go_out=paths=source_relative:./pkg/api/razpravljalnica  --go-grpc_out=paths=source_relative:./pkg/api/razpravljalnica  pkg/api/razpravljalnica/razpravljalnica.proto
 //
 //
 // Dobilo se bo:
@@ -28,16 +28,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MessageBoard_CreateUser_FullMethodName     = "/razpravljalnica.MessageBoard/CreateUser"
-	MessageBoard_CreateTopic_FullMethodName    = "/razpravljalnica.MessageBoard/CreateTopic"
-	MessageBoard_PostMessage_FullMethodName    = "/razpravljalnica.MessageBoard/PostMessage"
-	MessageBoard_UpdateMessage_FullMethodName  = "/razpravljalnica.MessageBoard/UpdateMessage"
-	MessageBoard_DeleteMessage_FullMethodName  = "/razpravljalnica.MessageBoard/DeleteMessage"
-	MessageBoard_LikeMessage_FullMethodName    = "/razpravljalnica.MessageBoard/LikeMessage"
-	MessageBoard_GetUser_FullMethodName        = "/razpravljalnica.MessageBoard/GetUser"
-	MessageBoard_ListTopics_FullMethodName     = "/razpravljalnica.MessageBoard/ListTopics"
-	MessageBoard_GetMessages_FullMethodName    = "/razpravljalnica.MessageBoard/GetMessages"
-	MessageBoard_SubscribeTopic_FullMethodName = "/razpravljalnica.MessageBoard/SubscribeTopic"
+	MessageBoard_CreateUser_FullMethodName      = "/razpravljalnica.MessageBoard/CreateUser"
+	MessageBoard_CreateTopic_FullMethodName     = "/razpravljalnica.MessageBoard/CreateTopic"
+	MessageBoard_PostMessage_FullMethodName     = "/razpravljalnica.MessageBoard/PostMessage"
+	MessageBoard_UpdateMessage_FullMethodName   = "/razpravljalnica.MessageBoard/UpdateMessage"
+	MessageBoard_DeleteMessage_FullMethodName   = "/razpravljalnica.MessageBoard/DeleteMessage"
+	MessageBoard_LikeMessage_FullMethodName     = "/razpravljalnica.MessageBoard/LikeMessage"
+	MessageBoard_GetUser_FullMethodName         = "/razpravljalnica.MessageBoard/GetUser"
+	MessageBoard_ListTopics_FullMethodName      = "/razpravljalnica.MessageBoard/ListTopics"
+	MessageBoard_GetMessages_FullMethodName     = "/razpravljalnica.MessageBoard/GetMessages"
+	MessageBoard_SubscribeTopic_FullMethodName  = "/razpravljalnica.MessageBoard/SubscribeTopic"
+	MessageBoard_InstallSnapshot_FullMethodName = "/razpravljalnica.MessageBoard/InstallSnapshot"
 )
 
 // MessageBoardClient is the client API for MessageBoard service.
@@ -68,6 +69,8 @@ type MessageBoardClient interface {
 	GetMessages(ctx context.Context, in *GetMessagesRequest, opts ...grpc.CallOption) (*GetMessagesResponse, error)
 	// Subscribe to topics; goes to the node returned by head
 	SubscribeTopic(ctx context.Context, in *SubscribeTopicRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[MessageEvent], error)
+	// kopiraj bazo iz starega na novi rep
+	InstallSnapshot(ctx context.Context, in *StorageSnapshot, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type messageBoardClient struct {
@@ -187,6 +190,16 @@ func (c *messageBoardClient) SubscribeTopic(ctx context.Context, in *SubscribeTo
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MessageBoard_SubscribeTopicClient = grpc.ServerStreamingClient[MessageEvent]
 
+func (c *messageBoardClient) InstallSnapshot(ctx context.Context, in *StorageSnapshot, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, MessageBoard_InstallSnapshot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MessageBoardServer is the server API for MessageBoard service.
 // All implementations must embed UnimplementedMessageBoardServer
 // for forward compatibility.
@@ -215,6 +228,8 @@ type MessageBoardServer interface {
 	GetMessages(context.Context, *GetMessagesRequest) (*GetMessagesResponse, error)
 	// Subscribe to topics; goes to the node returned by head
 	SubscribeTopic(*SubscribeTopicRequest, grpc.ServerStreamingServer[MessageEvent]) error
+	// kopiraj bazo iz starega na novi rep
+	InstallSnapshot(context.Context, *StorageSnapshot) (*emptypb.Empty, error)
 	mustEmbedUnimplementedMessageBoardServer()
 }
 
@@ -254,6 +269,9 @@ func (UnimplementedMessageBoardServer) GetMessages(context.Context, *GetMessages
 }
 func (UnimplementedMessageBoardServer) SubscribeTopic(*SubscribeTopicRequest, grpc.ServerStreamingServer[MessageEvent]) error {
 	return status.Error(codes.Unimplemented, "method SubscribeTopic not implemented")
+}
+func (UnimplementedMessageBoardServer) InstallSnapshot(context.Context, *StorageSnapshot) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method InstallSnapshot not implemented")
 }
 func (UnimplementedMessageBoardServer) mustEmbedUnimplementedMessageBoardServer() {}
 func (UnimplementedMessageBoardServer) testEmbeddedByValue()                      {}
@@ -449,6 +467,24 @@ func _MessageBoard_SubscribeTopic_Handler(srv interface{}, stream grpc.ServerStr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MessageBoard_SubscribeTopicServer = grpc.ServerStreamingServer[MessageEvent]
 
+func _MessageBoard_InstallSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageSnapshot)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessageBoardServer).InstallSnapshot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessageBoard_InstallSnapshot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessageBoardServer).InstallSnapshot(ctx, req.(*StorageSnapshot))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MessageBoard_ServiceDesc is the grpc.ServiceDesc for MessageBoard service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -491,6 +527,10 @@ var MessageBoard_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMessages",
 			Handler:    _MessageBoard_GetMessages_Handler,
+		},
+		{
+			MethodName: "InstallSnapshot",
+			Handler:    _MessageBoard_InstallSnapshot_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

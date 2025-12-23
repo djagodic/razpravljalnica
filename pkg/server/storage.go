@@ -222,3 +222,38 @@ func (s *NodeStorage) LikeMessage(topicId, commentId int64) (*razpravljalnica.Me
 	c.Likes++
 	return c, nil
 }
+
+//dodane funkcije za podporo snapshota -> kopiranje baze na novi tail
+func (s *NodeStorage) ListAllMessages() []*razpravljalnica.Message {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+
+    res := []*razpravljalnica.Message{}
+    for _, topicMsgs := range s.comments {
+        for _, m := range topicMsgs {
+            res = append(res, m)
+        }
+    }
+    return res
+}
+
+func (s *NodeStorage) ListUsers() []*razpravljalnica.User {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+
+    res := make([]*razpravljalnica.User, 0, len(s.users))
+    for _, u := range s.users {
+        res = append(res, u)
+    }
+    return res
+}
+
+//funkcija ki zbrise celo bazo -> uporabi se pred namestitivijo snapshota na novem tailu (pomoje nepotrebno)
+func (s *NodeStorage) Reset() {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    s.users = make(map[int64]*razpravljalnica.User)
+    s.topics = make(map[int64]*razpravljalnica.Topic)
+    s.comments = make(map[int64]map[int64]*razpravljalnica.Message)
+}

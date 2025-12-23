@@ -1,5 +1,5 @@
 // V rootu projekta
-// protoc -I=./pkg/api/razpravljalnica  --go_out=paths=source_relative:./pkg/api/razpravljalnica  --go-grpc_out=paths=source_relative:./pkg/api/razpravljalnica  pkg/api/razpravljalnica/razpravljalnica.proto
+// protoc -I ./pkg/api/razpravljalnica  --go_out=paths=source_relative:./pkg/api/razpravljalnica  --go-grpc_out=paths=source_relative:./pkg/api/razpravljalnica  pkg/api/razpravljalnica/razpravljalnica.proto
 //
 //
 // Dobilo se bo:
@@ -101,6 +101,8 @@ service  MessageBoard{
   // Subscribe to topics; goes to the node returned by head
   rpc SubscribeTopic(SubscribeTopicRequest) returns (stream MessageEvent);
 
+  //kopiraj bazo iz starega na novi rep
+  rpc InstallSnapshot(StorageSnapshot) returns (google.protobuf.Empty);
 }
 
 message CreateUserRequest {
@@ -178,3 +180,10 @@ message MessageEvent {
 message GetUserRequest {
   string name = 1;
 }
+
+message StorageSnapshot {
+  repeated User users = 1;
+  repeated Topic topics = 2;
+  repeated Message messages = 3;
+}
+
