@@ -90,7 +90,11 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 
 	//preveri ali moras predhodnje node obvestiti
 	if len(c.nodes) >= 2 {
-		err := c.sendChanges()
+		predzadnji := c.nodes[len(c.nodes)-2]
+		zadnji := c.nodes[len(c.nodes)-1]
+		//posljemu prejsnjemu repu obvestilo o novem repu
+		//TODO poslati to se clientom
+		err := c.sendChanges(predzadnji, zadnji)
 		if err != nil {
 			return &nadzorna_ravnina.RegisterNodeResponse{
 				Success: false,
@@ -111,31 +115,43 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 
 // DeregisterNode removes a node from the chain
 func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	fmt.Printf("DEBUG: deregistriramo node %s\n", nodeID)
+
+	//zaklenili smo ze v hartbeatu
+	//c.mu.Lock()
+	//defer c.mu.Unlock()
 	_, ok := c.nodeMap[nodeID]
+	//ce server ni v node Map pac ni registriran in vrnes nic
 	if !ok {
 		return
 	}
+
+	//ga izbrisemo iz map
 	delete(c.nodeMap, nodeID)
+
+	//ga izbrisemo iz nodes
 	for i, n := range c.nodes {
 		if n.NodeID == nodeID {
+			if i != 0 && i != len(c.nodes)-1 { //ce ni bil prvi in je za njim bil se en, moramo sprociti predhodniku o spremembi
+				fmt.Printf("DEBUG: poslal sendchanges v %s in %s\n", c.nodes[i-1].NodeID, c.nodes[i+1].NodeID)
+				c.sendChanges(c.nodes[i-1], c.nodes[i+1])
+			} else if i != 0 && i == len(c.nodes)-1 { //ce ni prvi, ampak je zadnji
+				fmt.Printf("DEBUG: poslal sendchanges v %s in 'nil'\n", c.nodes[i-1].NodeID)
+				c.sendChanges(c.nodes[i-1], nil)
+			} else if i == 0 { //ce odpove head
+				//TODO obvestimo cliente
+				fmt.Printf("DEBUG: odppovedal head: todo\n")
+			}
+			//izbrisemo iz verige
 			c.nodes = append(c.nodes[:i], c.nodes[i+1:]...)
+
 			break
 		}
 	}
+
+	//TODO razporedimo njegove subscriberje na druga vozlisca
 	log.Printf("deregistered node: %s", nodeID)
 }
-
-//Old implementation -> ohranil za rezervo
-// func (c *ControlPlaneServer) Heartbeat(nodeID string) {
-// 	c.mu.Lock()
-// 	defer c.mu.Unlock()
-// 	if n, ok := c.nodeMap[nodeID]; ok {
-// 		n.LastHB = time.Now()
-// 		n.Alive = true
-// 	}
-// }
 
 // Heartbeat updates last seen timestamp
 func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnina.HeartbeatRequest) (*emptypb.Empty, error) {
@@ -154,24 +170,6 @@ func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnin
 
 	return &emptypb.Empty{}, nil
 }
-
-//Old implementation -> ohranil za rezervo
-// func (c *ControlPlaneServer) monitorNodes() {
-// 	ticker := time.NewTicker(c.interval)
-// 	for range ticker.C {
-// 		c.mu.Lock()
-// 		for _, n := range c.nodes {
-// 			if time.Since(n.LastHB) > 2*c.interval {
-// 				if n.Alive {
-// 					n.Alive = false
-// 					log.Printf("node %s (address: %s) marked as dead", n.NodeID, n.Address)
-// 					c.reconfigureChain(n.NodeID)
-// 				}
-// 			}
-// 		}
-// 		c.mu.Unlock()
-// 	}
-// }
 
 // Periodic health check to detect dead nodes
 func (c *ControlPlaneServer) monitorNodes() {
@@ -275,29 +273,27 @@ func (c *ControlPlaneServer) Start() {
 	go c.monitorNodes()
 }
 
-// send changes to subscribers
-func (s *ControlPlaneServer) sendChanges() error {
-	if len(s.nodes) < 2 {
-		return fmt.Errorf("ne smemo klicati sendChanges ce nimamo vec ali enako 2 node v verigi")
+// send changes to subscribers -> poslji trenutnemu obvestilo o novem naslednjem
+func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo) error {
+	var change *nadzorna_ravnina.Changes
+	if naslednji == nil {
+		//ce hocemo nastaviti naslednjega na nil bomo poslali prazen string
+		change = &nadzorna_ravnina.Changes{NextAdress: ""}
+	} else {
+		//sporocilo o spremembi
+		change = &nadzorna_ravnina.Changes{NextAdress: naslednji.Address}
 	}
 
-	//vemo da sta vsaj dva
-	predzadnji := s.nodes[len(s.nodes)-2]
-	zadnji := s.nodes[len(s.nodes)-1]
-
-	//sporocilo o spremembi
-	change := &nadzorna_ravnina.Changes{NextAdress: zadnji.Address}
-
 	//pridobimo kanal predzadnjega
-	ch := s.subToChanges[predzadnji.NodeID]
+	ch := s.subToChanges[trenuten.NodeID]
 
 	select {
 	case ch <- change:
-	default: //drop if subscriber is slow
+	default:
+		fmt.Printf("DEBUG: subscriber %s is slow", trenuten.NodeID) //drop if subscriber is slow
 	}
 
 	return nil
-
 }
 
 // grpc SiuubscribeToChanges

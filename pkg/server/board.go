@@ -87,13 +87,26 @@ func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient n
 
 // povezi se na naslednji server v verigi
 func (s *MessageBoardServer) connectToNextNode(address string) {
+	//povezavo na nil naredimo tako da je address prazen string -> postanemo rep
+	if address == "" {
+		s.nextNode = nil
+		s.IsTail = true
+		log.Printf("Povezali na nov node: 'nil, stanje Tail: %b", s.IsTail)
+		return
+	}
+
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
 	}
 	s.mu.RLock()
 	s.nextNode = razpravljalnica.NewMessageBoardClient(conn)
+
+	//dolocimo tail
 	s.IsTail = false
+
+	log.Printf("Povezali na nov node: %s, stanje Tail: %b", address, s.IsTail)
+
 	s.mu.RUnlock()
 }
 
