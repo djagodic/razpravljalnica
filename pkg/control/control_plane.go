@@ -41,8 +41,6 @@ func NewControlPlaneServer() *ControlPlaneServer {
 	}
 }
 
-//
-
 // RegisterNode adds a new node to the chain (called by node at startup)
 func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_ravnina.RegisterNodeRequest) (*nadzorna_ravnina.RegisterNodeResponse, error) {
 	c.mu.Lock()
@@ -124,7 +122,7 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 // }
 
 // Heartbeat updates last seen timestamp
-func (c *ControlPlaneServer) Heartbeat(ctx context.Context,	req *nadzorna_ravnina.HeartbeatRequest) (*emptypb.Empty, error) {
+func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnina.HeartbeatRequest) (*emptypb.Empty, error) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -140,7 +138,6 @@ func (c *ControlPlaneServer) Heartbeat(ctx context.Context,	req *nadzorna_ravnin
 
 	return &emptypb.Empty{}, nil
 }
-
 
 //Old implementation -> ohranil za rezervo
 // func (c *ControlPlaneServer) monitorNodes() {
@@ -179,7 +176,7 @@ func (c *ControlPlaneServer) monitorNodes() {
 				c.reconfigureChain(n.NodeID)
 			}
 
-			//log.Printf("node %s heartbeat successful", n.NodeID)
+			log.Printf("node %s heartbeat successful", n.NodeID)
 		}
 
 		c.mu.Unlock()
@@ -213,41 +210,6 @@ func (c *ControlPlaneServer) GetClusterState(ctx context.Context, _ *emptypb.Emp
 		},
 	}, nil
 }
-
-// func (c *ControlPlaneServer) GetSubscriptionNodes(ctx context.Context, req *nadzorna_ravnina.SubscriptionNodeRequest) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
-
-// 	c.mu.RLock()
-// 	defer c.mu.RUnlock()
-
-// 	//TODO preveri ce je 0 serverjev online in vrni da ni mogoce dodeliti serverja za subscribe
-// 	// if len(c.nodes) == 0 {
-// 	// 	return nil, status.Error(codes.Unavailable, "no nodes available")
-// 	// }
-
-// 	// Deterministic selection
-// 	sum := req.UserId
-// 	for _, t := range req.TopicId {
-// 		sum += t
-// 	}
-
-// 	idx := sum % int64(len(c.nodes))
-// 	node := c.nodes[idx]
-
-// 	token := fmt.Sprintf(
-// 		"%s:%d:%d",
-// 		node.NodeID,
-// 		req.UserId,
-// 		time.Now().Unix(),
-// 	)
-
-// 	return &nadzorna_ravnina.SubscriptionNodeResponse{
-// 		SubscribeToken: token,
-// 		Node: &nadzorna_ravnina.NodeInfo{
-// 			NodeId:  node.NodeID,
-// 			Address: node.Address,
-// 		},
-// 	}, nil
-// }
 
 func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzorna_ravnina.SubscriptionNodeRequest) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
 
@@ -291,8 +253,6 @@ func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzo
 		},
 	}, nil
 }
-
-
 
 // Start launches monitoring loop
 func (c *ControlPlaneServer) Start() {
