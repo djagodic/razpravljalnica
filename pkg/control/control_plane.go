@@ -300,7 +300,7 @@ func (s *ControlPlaneServer) sendChanges() error {
 }
 
 // grpc SiuubscribeToChanges
-func (s *ControlPlaneServer) SubscribeTopic(req nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
+func (s *ControlPlaneServer) SubscribeTopic(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
 	s.subToChanges[req.NodeId] = ch
 
