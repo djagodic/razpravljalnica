@@ -9,6 +9,8 @@ import (
 	"time"
 
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -29,7 +31,7 @@ type MessageBoardServer struct {
 	nodeId   string
 	IsHead   bool
 	IsTail   bool
-	NextNode *Node
+	nextNode razpravljalnica.MessageBoardClient
 
 	// subscription channels: topicId -> userId -> chan *api.MessageEvent
 	subs map[string]map[string]chan *razpravljalnica.MessageEvent
@@ -42,6 +44,7 @@ func NewMessageBoardServer(nodeId string, isHead, isTail bool) *MessageBoardServ
 		nodeId:  nodeId,
 		IsHead:  isHead,
 		IsTail:  isTail,
+		nextNode: nil,
 		subs:    make(map[string]map[string]chan *razpravljalnica.MessageEvent),
 	}
 }
@@ -49,6 +52,16 @@ func NewMessageBoardServer(nodeId string, isHead, isTail bool) *MessageBoardServ
 // nextSequence returns monotonic sequence number
 func (s *MessageBoardServer) nextSequence() int64 {
 	return atomic.AddInt64(&s.seq, 1)
+}
+
+func (s *MessageBoardServer) ConnectToNextNode(address string) razpravljalnica.MessageBoardClient{
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect to node %s: %v", address, err)
+	}
+	s.nextNode = razpravljalnica.NewMessageBoardClient(conn)
+	s.IsTail = false
+	return razpravljalnica.NewMessageBoardClient(conn)
 }
 
 // ------------------------ gRPC methods -----------------------------
@@ -105,8 +118,13 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 		Sequence: s.nextSequence(),
 	}
 	s.log.Add(entry)
-	if s.IsHead {
-		//go s.ReplicateEntry(entry)
+
+	if !s.IsTail {
+		_, err := s.nextNode.CreateTopic(ctx, req)
+		if err != nil {
+				fmt.Print("Error creating topic:", err)
+				fmt.Printf("CurrentNode: %s", s.nodeId)
+			}
 	}
 
 	log.Printf("createTopic -> %d (%s)", topic.Id, topic.Name)
