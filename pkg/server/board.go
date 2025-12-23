@@ -86,7 +86,7 @@ func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient n
 }
 
 // povezi se na naslednji server v verigi
-func (s *MessageBoardServer) connectToNextNode(address string) razpravljalnica.MessageBoardClient {
+func (s *MessageBoardServer) connectToNextNode(address string) {
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
@@ -95,7 +95,6 @@ func (s *MessageBoardServer) connectToNextNode(address string) razpravljalnica.M
 	s.nextNode = razpravljalnica.NewMessageBoardClient(conn)
 	s.IsTail = false
 	s.mu.RUnlock()
-	return razpravljalnica.NewMessageBoardClient(conn)
 }
 
 // ------------------------ gRPC methods -----------------------------

@@ -144,7 +144,7 @@ func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnin
 
 	n, ok := c.nodeMap[req.NodeId]
 	if !ok {
-		log.Printf("heartbeat from unknown node %s", req.NodeId)
+		//log.Printf("heartbeat from unknown node %s", req.NodeId)
 		return &emptypb.Empty{}, nil
 	}
 
