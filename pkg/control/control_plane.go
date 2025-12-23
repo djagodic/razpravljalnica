@@ -19,10 +19,11 @@ import (
 type ControlPlaneServer struct {
 	nadzorna_ravnina.UnimplementedControlPlaneServer
 
-	mu       sync.RWMutex
-	nodes    []*NodeInfo // ordered chain: head -> ... -> tail
-	nodeMap  map[string]*NodeInfo
-	interval time.Duration
+	mu           sync.RWMutex
+	nodes        []*NodeInfo // ordered chain: head -> ... -> tail
+	nodeMap      map[string]*NodeInfo
+	interval     time.Duration
+	subToChanges map[string]chan *nadzorna_ravnina.Changes //subscriberji na spremembe -> ch
 }
 
 type NodeInfo struct {
@@ -257,4 +258,10 @@ func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzo
 // Start launches monitoring loop
 func (c *ControlPlaneServer) Start() {
 	go c.monitorNodes()
+}
+
+// grpc SiuubscribeToChanges
+func (s *ControlPlaneServer) SubscribeTopic(req nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlaneServer) error {
+	ch := make(chan *nadzorna_ravnina.Changes, 10)
+	s.subToChanges[]
 }

@@ -48,6 +48,10 @@ message HeartbeatRequest {
   string node_id = 1;
 }
 
+message SubscribeToChangesRequest {
+  string node_id = 1;
+}
+
 message Changes {
   string next_adress = 1;
 }
@@ -63,5 +67,5 @@ service ControlPlane {
     // Server: Check if servers are alive or down
     rpc Heartbeat(HeartbeatRequest) returns (google.protobuf.Empty);
     // Server:
-    rpc SubscribeToChanges(google.protobuf.Empty) returns (stream Changes);
+    rpc SubscribeToChanges(SubscribeToChangesRequest) returns (stream Changes);
 }
