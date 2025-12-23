@@ -45,7 +45,6 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 	return razpravljalnica.NewMessageBoardClient(conn), conn
 }
 
-
 func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, controlAddr string) {
 	ctx := context.Background()
 
@@ -100,7 +99,6 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 	}()
 	fmt.Println("Subscription started in background")
 }
-
 
 func loginUser(headClient razpravljalnica.MessageBoardClient) (*razpravljalnica.User, error) {
 	reader := bufio.NewReader(os.Stdin)
@@ -215,9 +213,9 @@ func main() {
 			topicID, _ := strconv.ParseInt(fields[0], 10, 64)
 			text := fields[1]
 			msg, err := headClient.PostMessage(context.Background(), &razpravljalnica.PostMessageRequest{
-				UserId:   currentUser.Id,
-				TopicId:  topicID,
-				Text:     text,
+				UserId:  currentUser.Id,
+				TopicId: topicID,
+				Text:    text,
 			})
 			if err != nil {
 				fmt.Println("Error posting message:", err)
@@ -321,33 +319,6 @@ func main() {
 				fmt.Printf("%d (%s) | User %d (%s) | Message %d (%s) | Likes: %d\n", m.TopicId, m.TopicName, m.UserId, m.UserName, m.Id, m.Text, m.Likes)
 			}
 
-		//stara implementacija ni upoštevala možnosti, da poveš od katerega sporočila naprej boš subscriban -> torej koliko zgodovine mora prenesti
-		// case "subscribeOriginal":
-		// 	if currentUser == nil {
-		// 		fmt.Println("No user, please createuser first")
-		// 		continue
-		// 	}
-		// 	// Expect format: <fromMessageId> <topicId1,topicId2,...>
-		// 	fields := strings.Fields(args)
-		// 	if len(fields) < 2 {
-		// 		fmt.Println("Usage: subscribe <fromMessageId> <topicId1,topicId2,...>")
-		// 		continue
-		// 	}
-
-		// 	fromMessageId, err := strconv.ParseInt(fields[0], 10, 64)
-		// 	if err != nil {
-		// 		fmt.Println("Invalid fromMessageId:", err)
-		// 		continue
-		// 	}
-		// 	idStrs := strings.Split(args, ",")
-		// 	var topicIDs []int64
-		// 	for _, s := range idStrs {
-		// 		id, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
-		// 		topicIDs = append(topicIDs, id)
-		// 	}
-		// 	fmt.Printf("from: %d, topic: %d", fromMessageId, topicIDs[0])
-		// 	startSubscribe(currentUser.Id, topicIDs, fromMessageId, *controlAddr)
-
 		case "subscribe":
 			if currentUser == nil {
 				fmt.Println("No user, please createuser first")
@@ -369,8 +340,8 @@ func main() {
 			}
 
 			// parse topic IDs
-			topicList := strings.Join(fields[1:], " ")   // join back the rest in case user typed spaces
-			idStrs := strings.Split(topicList, ",")      // split by comma
+			topicList := strings.Join(fields[1:], " ") // join back the rest in case user typed spaces
+			idStrs := strings.Split(topicList, ",")    // split by comma
 			var topicIDs []int64
 			for _, s := range idStrs {
 				s = strings.TrimSpace(s)
@@ -391,7 +362,6 @@ func main() {
 			}
 
 			startSubscribe(currentUser.Id, topicIDs, fromMessageId, *controlAddr)
-
 
 		default:
 			fmt.Println("Unknown command")

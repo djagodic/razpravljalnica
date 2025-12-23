@@ -26,6 +26,7 @@ const (
 	ControlPlane_RegisterNode_FullMethodName        = "/controlplane.ControlPlane/RegisterNode"
 	ControlPlane_GetSubscriptionNode_FullMethodName = "/controlplane.ControlPlane/GetSubscriptionNode"
 	ControlPlane_Heartbeat_FullMethodName           = "/controlplane.ControlPlane/Heartbeat"
+	ControlPlane_SubscribeToChanges_FullMethodName  = "/controlplane.ControlPlane/SubscribeToChanges"
 )
 
 // ControlPlaneClient is the client API for ControlPlane service.
@@ -34,14 +35,16 @@ const (
 //
 // ControlPlane service
 type ControlPlaneClient interface {
-	// Returns current head and tail of the cluster
+	// Client: Returns current head and tail of the cluster
 	GetClusterState(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetClusterStateResponse, error)
-	// Register a new node
+	// Server: Register a new node
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
-	// Request a node to which a subscription can be opened.
+	// Client: Request a node to which a subscription can be opened.
 	GetSubscriptionNode(ctx context.Context, in *SubscriptionNodeRequest, opts ...grpc.CallOption) (*SubscriptionNodeResponse, error)
-	// Check if servers are alive or down
+	// Server: Check if servers are alive or down
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// Server:
+	SubscribeToChanges(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Changes], error)
 }
 
 type controlPlaneClient struct {
@@ -92,20 +95,41 @@ func (c *controlPlaneClient) Heartbeat(ctx context.Context, in *HeartbeatRequest
 	return out, nil
 }
 
+func (c *controlPlaneClient) SubscribeToChanges(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Changes], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ControlPlane_ServiceDesc.Streams[0], ControlPlane_SubscribeToChanges_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[emptypb.Empty, Changes]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ControlPlane_SubscribeToChangesClient = grpc.ServerStreamingClient[Changes]
+
 // ControlPlaneServer is the server API for ControlPlane service.
 // All implementations must embed UnimplementedControlPlaneServer
 // for forward compatibility.
 //
 // ControlPlane service
 type ControlPlaneServer interface {
-	// Returns current head and tail of the cluster
+	// Client: Returns current head and tail of the cluster
 	GetClusterState(context.Context, *emptypb.Empty) (*GetClusterStateResponse, error)
-	// Register a new node
+	// Server: Register a new node
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
-	// Request a node to which a subscription can be opened.
+	// Client: Request a node to which a subscription can be opened.
 	GetSubscriptionNode(context.Context, *SubscriptionNodeRequest) (*SubscriptionNodeResponse, error)
-	// Check if servers are alive or down
+	// Server: Check if servers are alive or down
 	Heartbeat(context.Context, *HeartbeatRequest) (*emptypb.Empty, error)
+	// Server:
+	SubscribeToChanges(*emptypb.Empty, grpc.ServerStreamingServer[Changes]) error
 	mustEmbedUnimplementedControlPlaneServer()
 }
 
@@ -127,6 +151,9 @@ func (UnimplementedControlPlaneServer) GetSubscriptionNode(context.Context, *Sub
 }
 func (UnimplementedControlPlaneServer) Heartbeat(context.Context, *HeartbeatRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedControlPlaneServer) SubscribeToChanges(*emptypb.Empty, grpc.ServerStreamingServer[Changes]) error {
+	return status.Error(codes.Unimplemented, "method SubscribeToChanges not implemented")
 }
 func (UnimplementedControlPlaneServer) mustEmbedUnimplementedControlPlaneServer() {}
 func (UnimplementedControlPlaneServer) testEmbeddedByValue()                      {}
@@ -221,6 +248,17 @@ func _ControlPlane_Heartbeat_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlane_SubscribeToChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(emptypb.Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ControlPlaneServer).SubscribeToChanges(m, &grpc.GenericServerStream[emptypb.Empty, Changes]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ControlPlane_SubscribeToChangesServer = grpc.ServerStreamingServer[Changes]
+
 // ControlPlane_ServiceDesc is the grpc.ServiceDesc for ControlPlane service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -245,6 +283,12 @@ var ControlPlane_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlane_Heartbeat_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeToChanges",
+			Handler:       _ControlPlane_SubscribeToChanges_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "nadzornaRavnina.proto",
 }

@@ -1,4 +1,4 @@
-//compile with: protoc -I=./pkg/api/nadzornaRavnina  --go_out=paths=source_relative:./pkg/api/nadzornaRavnina  --go-grpc_out=paths=source_relative:./pkg/api/nadzornaRavnina  pkg/api/nadzornaRavnina/nadzornaRavnina.proto
+//compile with: protoc -I ./pkg/api/nadzornaRavnina  --go_out=paths=source_relative:./pkg/api/nadzornaRavnina  --go-grpc_out=paths=source_relative:./pkg/api/nadzornaRavnina  pkg/api/nadzornaRavnina/nadzornaRavnina.proto
 
 syntax = "proto3";
 
@@ -48,14 +48,20 @@ message HeartbeatRequest {
   string node_id = 1;
 }
 
+message Changes {
+  string next_adress = 1;
+}
+
 // ControlPlane service
 service ControlPlane {
-    // Returns current head and tail of the cluster
+    // Client: Returns current head and tail of the cluster
     rpc GetClusterState(google.protobuf.Empty) returns (GetClusterStateResponse);
-    // Register a new node
+    // Server: Register a new node
     rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
-    // Request a node to which a subscription can be opened.
+    // Client: Request a node to which a subscription can be opened.
     rpc GetSubscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
-    // Check if servers are alive or down
+    // Server: Check if servers are alive or down
     rpc Heartbeat(HeartbeatRequest) returns (google.protobuf.Empty);
+    // Server:
+    rpc SubscribeToChanges(google.protobuf.Empty) returns (stream Changes);
 }

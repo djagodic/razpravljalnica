@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-//naj gredo od 1 naprej, lazje uporabnikov, patch da subscribe vrne tudi prvi message (ker z 0 ni hotlo)
+// naj gredo od 1 naprej, lazje uporabnikov, patch da subscribe vrne tudi prvi message (ker z 0 ni hotlo)
 var nextUserId int64 = 1
 var nextTopicId int64 = 1
 var nextMessageId int64 = 1
@@ -163,36 +163,9 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	// broadcast to local subscribers
 	go s.broadcastToSubscribers(message, razpravljalnica.OpType_POST)
 
-	log.Printf("postMessage -> %d (%s) at topic %d (%s) by user %d (%s)", message.Id, message.Text, message.TopicId,message.TopicName, message.UserId, message.UserName)
+	log.Printf("postMessage -> %d (%s) at topic %d (%s) by user %d (%s)", message.Id, message.Text, message.TopicId, message.TopicName, message.UserId, message.UserName)
 	return message, nil
 }
-
-// helper
-// func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, op razpravljalnica.OpType) {
-// 	for _, userSubs := range s.subs {
-// 		for _, ch := range userSubs {
-// 			ev := &razpravljalnica.MessageEvent{
-// 				SequenceNumber: s.nextSequence(),
-// 				Op:             op,
-// 				Message: &razpravljalnica.Message{
-// 					Id:        c.Id,
-// 					TopicId:   c.TopicId,
-// 					UserId:    c.UserId,
-// 					UserName:  c.UserName,
-// 					Text:      c.Text,
-// 					CreatedAt: c.CreatedAt,
-// 					Likes:     c.Likes,
-// 				},
-// 				EventAt: timestamppb.New(time.Now()),
-// 			}
-// 			select {
-// 			case ch <- ev:
-// 			default:
-// 				// drop if subscriber is slow
-// 			}
-// 		}
-// 	}
-// }
 
 func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, op razpravljalnica.OpType) {
 	topicIDStr := fmt.Sprint(c.TopicId)
@@ -221,13 +194,14 @@ func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, 
 			EventAt: timestamppb.New(time.Now()),
 		}
 		select {
+		//v primeru da je client offline in je v njegovem kanalu ze 100 sporocil
+		//bi tukaj ce ne bi imeli select stavka cakali
 		case ch <- ev:
 		default:
 			// drop if subscriber is slow
 		}
 	}
 }
-
 
 // ------------------------ UpdateMessage -------------------------
 func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljalnica.UpdateMessageRequest) (*razpravljalnica.Message, error) {
@@ -321,7 +295,8 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 	if s.IsHead {
-		//go s.ReplicateEntry(entry)
+		//s.LikeMessage(req)
+
 	}
 
 	go s.broadcastToSubscribers(comment, razpravljalnica.OpType_LIKE)
@@ -380,19 +355,24 @@ func (s *MessageBoardServer) GetMessages(ctx context.Context, req *razpravljalni
 }
 
 // ------------------------ SubscribeTopic ------------------------
+// grpc poskrbi da se vrne grpc.ServerStreamingClient[razpravljalnica.MessageEvent]
 func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicRequest, stream razpravljalnica.MessageBoard_SubscribeTopicServer) error {
 	for _, topicId := range req.TopicId {
-		if _, ok := s.subs[fmt.Sprint(topicId)]; !ok {
-			s.subs[fmt.Sprint(topicId)] = make(map[string]chan *razpravljalnica.MessageEvent)
-		}
-		ch := make(chan *razpravljalnica.MessageEvent, 100)
-		s.subs[fmt.Sprint(topicId)][fmt.Sprint(req.UserId)] = ch
-
-		// send historical messages
+		// pridobi stara sporocila in vrni error ce topic not found ali ni sporocil v topicu
 		msgs, err := s.storage.GetMessages(topicId, req.FromMessageId, 100)
 		if err != nil {
 			return err
 		}
+
+		if _, ok := s.subs[fmt.Sprint(topicId)]; !ok {
+			//ustvari kanal, ce topic se ni shranjen v subs
+			s.subs[fmt.Sprint(topicId)] = make(map[string]chan *razpravljalnica.MessageEvent)
+		}
+		ch := make(chan *razpravljalnica.MessageEvent, 100)
+		//shranis kanal subscriberja v subs
+		s.subs[fmt.Sprint(topicId)][fmt.Sprint(req.UserId)] = ch
+
+		//poslji stara sporocila
 		for _, m := range msgs {
 			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),

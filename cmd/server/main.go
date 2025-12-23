@@ -32,8 +32,6 @@ func startHeartbeat(cpAddr, nodeID string) {
 	}
 }
 
-
-
 func main() {
 	addr := flag.String("addr", ":50051", "server address")
 	addrControl := flag.String("addrControl", "localhost:5000", "control plane address")
@@ -42,6 +40,7 @@ func main() {
 	//isTail := flag.Bool("tail", false, "is tail")
 	flag.Parse()
 
+	//povezemo se na nadzorno ravnino kot client
 	conn, err := grpc.NewClient(*addrControl, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
@@ -57,11 +56,12 @@ func main() {
 		Address: *addr,
 	}
 
+	//registriramo node
 	resp, err := ctrlClient.RegisterNode(ctx, req)
 	if err != nil {
 		log.Fatalf("RegisterNode RPC failed: %v", err)
 	}
-	
+
 	//preverimo response
 	if resp.Success {
 		log.Printf("Node registered successfully: %s\n", resp.Message)
@@ -73,9 +73,10 @@ func main() {
 	isHead := &resp.IsHead
 	isTail := &resp.IsTail
 
+	//zacnemo s hartbeatom
 	go startHeartbeat(*addrControl, *nodeID)
 
-	//naredimo nov grpc strezik
+	//naredimo nov grpc strezik z clienta ce si head, ali za predhodni server ce si vmes
 	s := grpc.NewServer()
 
 	//board je struktura za strezenje metod na razpravljalnici
