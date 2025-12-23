@@ -44,7 +44,7 @@ type ControlPlaneClient interface {
 	// Server: Check if servers are alive or down
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Server:
-	SubscribeToChanges(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Changes], error)
+	SubscribeToChanges(ctx context.Context, in *SubscribeToChangesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Changes], error)
 }
 
 type controlPlaneClient struct {
@@ -95,13 +95,13 @@ func (c *controlPlaneClient) Heartbeat(ctx context.Context, in *HeartbeatRequest
 	return out, nil
 }
 
-func (c *controlPlaneClient) SubscribeToChanges(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Changes], error) {
+func (c *controlPlaneClient) SubscribeToChanges(ctx context.Context, in *SubscribeToChangesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Changes], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ControlPlane_ServiceDesc.Streams[0], ControlPlane_SubscribeToChanges_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[emptypb.Empty, Changes]{ClientStream: stream}
+	x := &grpc.GenericClientStream[SubscribeToChangesRequest, Changes]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ type ControlPlaneServer interface {
 	// Server: Check if servers are alive or down
 	Heartbeat(context.Context, *HeartbeatRequest) (*emptypb.Empty, error)
 	// Server:
-	SubscribeToChanges(*emptypb.Empty, grpc.ServerStreamingServer[Changes]) error
+	SubscribeToChanges(*SubscribeToChangesRequest, grpc.ServerStreamingServer[Changes]) error
 	mustEmbedUnimplementedControlPlaneServer()
 }
 
@@ -152,7 +152,7 @@ func (UnimplementedControlPlaneServer) GetSubscriptionNode(context.Context, *Sub
 func (UnimplementedControlPlaneServer) Heartbeat(context.Context, *HeartbeatRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
-func (UnimplementedControlPlaneServer) SubscribeToChanges(*emptypb.Empty, grpc.ServerStreamingServer[Changes]) error {
+func (UnimplementedControlPlaneServer) SubscribeToChanges(*SubscribeToChangesRequest, grpc.ServerStreamingServer[Changes]) error {
 	return status.Error(codes.Unimplemented, "method SubscribeToChanges not implemented")
 }
 func (UnimplementedControlPlaneServer) mustEmbedUnimplementedControlPlaneServer() {}
@@ -249,11 +249,11 @@ func _ControlPlane_Heartbeat_Handler(srv interface{}, ctx context.Context, dec f
 }
 
 func _ControlPlane_SubscribeToChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(emptypb.Empty)
+	m := new(SubscribeToChangesRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ControlPlaneServer).SubscribeToChanges(m, &grpc.GenericServerStream[emptypb.Empty, Changes]{ServerStream: stream})
+	return srv.(ControlPlaneServer).SubscribeToChanges(m, &grpc.GenericServerStream[SubscribeToChangesRequest, Changes]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.

@@ -261,7 +261,7 @@ func (c *ControlPlaneServer) Start() {
 }
 
 // grpc SiuubscribeToChanges
-func (s *ControlPlaneServer) SubscribeTopic(req nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlaneServer) error {
+func (s *ControlPlaneServer) SubscribeToChanges(req nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlaneServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
 	s.subToChanges[]
 }
