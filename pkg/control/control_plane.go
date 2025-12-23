@@ -75,6 +75,7 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 		Alive:   true,
 		LastHB:  time.Now(),
 	}
+	//dodamo nov node na konec in v nodeMap
 	c.nodes = append(c.nodes, node)
 	c.nodeMap[req.NodeId] = node
 	log.Printf("registered node: %s (%s)", req.NodeId, req.Address)
@@ -84,6 +85,19 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 	isTail := true
 	if len(c.nodes) == 1 { //ce je to edini node je tudi head
 		isHead = true
+	}
+
+	//preveri ali moras predhodnje node obvestiti
+	if len(c.nodes) >= 2 {
+		err := c.sendChanges()
+		if err != nil {
+			return &nadzorna_ravnina.RegisterNodeResponse{
+				Success: false,
+				Message: "sprememba ob registraciji neuspesna",
+				IsHead:  isHead,
+				IsTail:  isTail,
+			}, fmt.Errorf("sprememba ob registraciji nodeId: %s ni bila uspesna", node.NodeID)
+		}
 	}
 
 	return &nadzorna_ravnina.RegisterNodeResponse{
@@ -260,8 +274,45 @@ func (c *ControlPlaneServer) Start() {
 	go c.monitorNodes()
 }
 
+// send changes to subscribers
+func (s *ControlPlaneServer) sendChanges() error {
+	if len(s.nodes) < 2 {
+		return fmt.Errorf("ne smemo klicati sendChanges ce nimamo vec ali enako 2 node v verigi")
+	}
+
+	//vemo da sta vsaj dva
+	predzadnji := s.nodes[len(s.nodes)-2]
+	zadnji := s.nodes[len(s.nodes)-1]
+
+	//sporocilo o spremembi
+	change := &nadzorna_ravnina.Changes{NextAdress: zadnji.Address}
+
+	//pridobimo kanal predzadnjega
+	ch := s.subToChanges[predzadnji.NodeID]
+
+	select {
+	case ch <- change:
+	default: //drop if subscriber is slow
+	}
+
+	return nil
+
+}
+
 // grpc SiuubscribeToChanges
-func (s *ControlPlaneServer) SubscribeTopic(req nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlaneServer) error {
+func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
-	s.subToChanges[]
+	s.subToChanges[req.NodeId] = ch
+
+	//stream new messages
+	go func(ch chan *nadzorna_ravnina.Changes) {
+		for ev := range ch {
+			if err := stream.Send(ev); err != nil {
+				return
+			}
+		}
+	}(ch)
+
+	// block to keep the stream open
+	select {}
 }
