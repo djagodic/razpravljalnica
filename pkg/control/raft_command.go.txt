@@ -1,0 +1,24 @@
+package control
+
+import (
+	"encoding/json"
+
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+)
+
+// RPCCommand is the command stored in Raft log
+type RPCCommand struct {
+	Op                  string                            `json:"op"` // "RegisterNode" or "DeregisterNode"
+	RegisterNodeRequest *nadzorna_ravnina.RegisterNodeRequest `json:"register,omitempty"`
+	NodeID              string                            `json:"node_id,omitempty"`
+}
+
+// Marshal encodes command to bytes
+func (c *RPCCommand) Marshal() ([]byte, error) {
+	return json.Marshal(c)
+}
+
+// Unmarshal decodes bytes into command
+func (c *RPCCommand) Unmarshal(data []byte) error {
+	return json.Unmarshal(data, c)
+}
