@@ -29,8 +29,6 @@ var (
 	currentMessages []*razpravljalnica.Message
 )
 
-var pages *tview.Pages
-
 /* ===================== gRPC HELPERS ===================== */
 
 func getClusterState(addr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
@@ -123,7 +121,7 @@ func mainUI() tview.Primitive {
 	input.SetFieldWidth(0)
 
 	help := tview.NewTextView().
-		SetText("Shortcuts (Ctrl +): F1=Input, F3=Topics, F4=Messages, L=Like message, R=Refresh, N=createNewTopic, U=updateMessage, D=deleteMessage").
+		SetText("Shortcuts (Ctrl +): F1=Input, F3=Topics, F4=Messages, F6=Like message, R=Refresh, N=createNewTopic").
 		SetTextColor(tcell.ColorGreen)
 
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
@@ -185,7 +183,7 @@ func mainUI() tview.Primitive {
 					loadMessages(messages, currentTopicID)
 				}
 				app.SetFocus(messages)
-			case tcell.KeyCtrlL: // like selected message
+			case tcell.KeyF6: // like selected message
 				index := messages.GetCurrentItem()
 				if index >= 0 && index < len(currentMessages) {
 					likeMessage(currentMessages[index].Id)
@@ -194,22 +192,13 @@ func mainUI() tview.Primitive {
 				}
 			case tcell.KeyCtrlN: // Ctrl+N -> create topic
 				createTopicPrompt(topics, messages, input)
-			case tcell.KeyCtrlU:
-				updateMessagePrompt(messages, input)
-			case tcell.KeyCtrlD:
-    			deleteMessagePrompt(messages, input)
-
 			}
 
 		}
 		return event
 	})
 
-	pages = tview.NewPages().
-    AddPage("main", flex, true, true)
-
-	return pages
-
+	return flex
 }
 
 /* ===================== DATA LOADING ===================== */
@@ -370,117 +359,18 @@ func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
 	form.SetBorder(true).SetTitle("Create Topic").SetTitleAlign(tview.AlignLeft)
 
 	// Use Pages to overlay the form on top of current UI
-	pages.AddPage("form", form, true, true)
-	app.SetFocus(form)
+	pages := tview.NewPages().
+		AddPage("main", mainUI(), true, true).
+		AddPage("form", form, true, true)
 
-}
-
-/* ===================== UPDATE MESSAGE ===================== */
-func updateMessagePrompt(messages *tview.List, input *tview.InputField) {
-	index := messages.GetCurrentItem()
-	if index < 0 || index >= len(currentMessages) {
-		return
-	}
-
-	msg := currentMessages[index]
-	if currentUser == nil || msg.UserId != currentUser.Id {
-		// Only allow updating own messages
-		return
-	}
-
-	form := tview.NewForm()
-	var newText string = msg.Text
-
-	form.AddInputField("Edit Message", msg.Text, 0, nil, func(text string) {
-		newText = text
-	})
-
-	form.AddButton("Update", func() {
-		head, _, err := getClusterState(controlAddr)
-		if err != nil {
-			return
-		}
-
-		client, conn := connectToNode(head.Address)
-		defer conn.Close()
-
-		_, err = client.UpdateMessage(context.Background(), &razpravljalnica.UpdateMessageRequest{
-			UserId:    currentUser.Id,
-			TopicId:   currentTopicID,
-			MessageId: msg.Id,
-			Text:      newText,
-		})
-		if err != nil {
-			return
-		}
-
-		loadMessages(messages, currentTopicID)
-		pages.HidePage("update")
-		app.SetFocus(input)
-	})
-
-	form.AddButton("Cancel", func() {
-		pages.HidePage("update")
-		app.SetFocus(input)
-	})
-
-	form.SetBorder(true).SetTitle("Update Message").SetTitleAlign(tview.AlignLeft)
-
-	pages.AddPage("update", form, true, true)
+	app.SetRoot(pages, true)
 	app.SetFocus(form)
 }
 
-
-/* ===================== DELETE MESSAGE ===================== */
-func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
-	index := messages.GetCurrentItem()
-	if index < 0 || index >= len(currentMessages) {
-		return
-	}
-
-	msg := currentMessages[index]
-	if currentUser == nil || msg.UserId != currentUser.Id {
-		// Only allow deleting own messages
-		return
-	}
-
-	form := tview.NewForm()
-	form.AddButton("Delete", func() {
-		head, _, err := getClusterState(controlAddr)
-		if err != nil {
-			return
-		}
-
-		client, conn := connectToNode(head.Address)
-		defer conn.Close()
-
-		_, err = client.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
-			UserId:    currentUser.Id,
-			TopicId:   currentTopicID,
-			MessageId: msg.Id,
-		})
-		if err != nil {
-			return
-		}
-
-		loadMessages(messages, currentTopicID)
-		pages.HidePage("delete")
-		app.SetFocus(input)
-	})
-
-	form.AddButton("Cancel", func() {
-		pages.HidePage("delete")
-		app.SetFocus(input)
-	})
-
-	form.SetBorder(true).SetTitle("Do you really want to delete message?").SetTitleAlign(tview.AlignLeft)
-
-	pages.AddPage("delete", form, true, true)
-	app.SetFocus(form)
-}
 
 
 /* ===================== MAIN ===================== */
+
 func main() {
 	flag.StringVar(&controlAddr, "addrControl", "localhost:5000", "control plane address")
 	flag.Parse()
