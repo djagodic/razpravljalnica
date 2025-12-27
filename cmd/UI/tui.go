@@ -1,0 +1,390 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"log"
+	"sort"
+	"time"
+
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+/* ===================== GLOBALS ===================== */
+
+var (
+	controlAddr     string
+	currentUser     *razpravljalnica.User
+	app             *tview.Application
+	currentTopicID  int64
+	currentMessages []*razpravljalnica.Message
+)
+
+/* ===================== gRPC HELPERS ===================== */
+
+func getClusterState(addr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, err
+	}
+	defer conn.Close()
+
+	client := nadzorna_ravnina.NewControlPlaneClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := client.GetClusterState(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp.Head, resp.Tail, nil
+}
+
+func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.ClientConn) {
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect to node %s: %v", address, err)
+	}
+	return razpravljalnica.NewMessageBoardClient(conn), conn
+}
+
+/* ===================== UI SCREENS ===================== */
+
+func loginScreen(onSuccess func()) tview.Primitive {
+	form := tview.NewForm()
+	var username string
+
+	form.AddInputField("Username", "", 20, nil, func(text string) {
+		username = text
+	})
+
+	form.AddButton("Login", func() {
+		if username == "" {
+			return
+		}
+
+		head, _, err := getClusterState(controlAddr)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		client, conn := connectToNode(head.Address)
+		defer conn.Close()
+
+		u, err := client.GetUser(context.Background(),
+			&razpravljalnica.GetUserRequest{Name: username})
+
+		if err != nil {
+			u, err = client.CreateUser(context.Background(),
+				&razpravljalnica.CreateUserRequest{Name: username})
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		}
+
+		currentUser = u
+		onSuccess()
+	})
+
+	form.SetBorder(true)
+	form.SetTitle("Login")
+
+	return form
+}
+
+/* ===================== MAIN UI ===================== */
+func mainUI() tview.Primitive {
+	topics := tview.NewList()
+	topics.SetBorder(true)
+	topics.SetTitle("Topics")
+
+	// Use List instead of TextView to allow selecting messages
+	messages := tview.NewList()
+	messages.SetBorder(true)
+	messages.SetTitle("Messages")
+
+	input := tview.NewInputField()
+	input.SetLabel("Message: ")
+	input.SetFieldWidth(0)
+
+	help := tview.NewTextView().
+		SetText("Shortcuts (Ctrl +): F1=Input, F3=Topics, F4=Messages, F6=Like message, R=Refresh, N=createNewTopic").
+		SetTextColor(tcell.ColorGreen)
+
+	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	horizontal := tview.NewFlex()
+	horizontal.AddItem(topics, 0, 1, true)
+	horizontal.AddItem(messages, 0, 3, false)
+	flex.AddItem(horizontal, 0, 1, true)
+	flex.AddItem(input, 3, 0, false)
+	flex.AddItem(help, 1, 0, false)
+
+	loadTopics(topics, messages, input)
+	app.SetFocus(topics)
+
+	/* ===================== POSTING ===================== */
+	input.SetDoneFunc(func(key tcell.Key) {
+		if key != tcell.KeyEnter || currentTopicID == 0 {
+			return
+		}
+
+		text := input.GetText()
+		if text == "" {
+			return
+		}
+
+		head, _, err := getClusterState(controlAddr)
+		if err != nil {
+			return
+		}
+
+		client, conn := connectToNode(head.Address)
+		defer conn.Close()
+
+		_, err = client.PostMessage(context.Background(),
+			&razpravljalnica.PostMessageRequest{
+				TopicId: currentTopicID,
+				Text:    text,
+				UserId:  currentUser.Id,
+			})
+		if err == nil {
+			input.SetText("")
+			loadMessages(messages, currentTopicID)
+		}
+	})
+
+	/* ===================== KEY SHORTCUTS ===================== */
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Modifiers()&tcell.ModCtrl != 0 {
+			switch event.Key() {
+			case tcell.KeyF3:
+				app.SetFocus(topics)
+			case tcell.KeyF4:
+				app.SetFocus(messages)
+			case tcell.KeyF1:
+				app.SetFocus(input)
+			case tcell.KeyCtrlR:
+				app.SetFocus(topics)
+				loadTopics(topics, messages, input)
+				if currentTopicID != 0 {
+					loadMessages(messages, currentTopicID)
+				}
+				app.SetFocus(messages)
+			case tcell.KeyF6: // like selected message
+				index := messages.GetCurrentItem()
+				if index >= 0 && index < len(currentMessages) {
+					likeMessage(currentMessages[index].Id)
+					loadMessages(messages, currentTopicID)
+					//app.Draw() // force redraw after updating the list
+				}
+			case tcell.KeyCtrlN: // Ctrl+N -> create topic
+				createTopicPrompt(topics, messages, input)
+			}
+
+		}
+		return event
+	})
+
+	return flex
+}
+
+/* ===================== DATA LOADING ===================== */
+func loadTopics(topics, messages *tview.List, input *tview.InputField) {
+	_, tail, err := getClusterState(controlAddr)
+	if err != nil {
+		return
+	}
+
+	client, conn := connectToNode(tail.Address)
+	defer conn.Close()
+
+	resp, err := client.ListTopics(context.Background(), &emptypb.Empty{})
+	if err != nil {
+		return
+	}
+
+	// Sort topics by Id
+	sort.Slice(resp.Topics, func(i, j int) bool {
+		return resp.Topics[i].Id < resp.Topics[j].Id
+	})
+
+	topics.Clear()
+	for _, t := range resp.Topics {
+		topicID := t.Id
+		topics.AddItem(
+			fmt.Sprintf("%d: %s", t.Id, t.Name),
+			"",
+			0,
+			func() {
+				currentTopicID = topicID
+				loadMessages(messages, topicID)
+				app.SetFocus(input) // focus input after selecting topic
+			},
+		)
+	}
+}
+
+/* ===================== LOAD MESSAGES ===================== */
+func loadMessages(list *tview.List, topicID int64) {
+	list.Clear()
+	currentMessages = nil
+
+	_, tail, err := getClusterState(controlAddr)
+	if err != nil {
+		return
+	}
+
+	client, conn := connectToNode(tail.Address)
+	defer conn.Close()
+
+	resp, err := client.GetMessages(context.Background(),
+		&razpravljalnica.GetMessagesRequest{
+			TopicId: topicID,
+			Limit:   100,
+		})
+	if err != nil {
+		return
+	}
+
+	currentMessages = resp.Messages
+	for _, m := range resp.Messages {
+		list.AddItem(
+			fmt.Sprintf("[yellow]%s[-]: %s [gray](❤️ %d)[-]", m.UserName, m.Text, m.Likes),
+			"",
+			0,
+			nil,
+		)
+	}
+
+	// focus on last message
+	if len(currentMessages) > 0 {
+		list.SetCurrentItem(len(currentMessages) - 1)
+	}
+	//app.Draw() // force redraw
+
+}
+
+/* ===================== LIKE MESSAGE ===================== */
+func likeMessage(messageID int64) {
+	if currentTopicID == 0 || currentUser == nil {
+		return
+	}
+
+	head, _, err := getClusterState(controlAddr)
+	if err != nil {
+		return
+	}
+
+	client, conn := connectToNode(head.Address)
+	defer conn.Close()
+
+	//msg, err := client.LikeMessage(context.Background(),
+	_, err = client.LikeMessage(context.Background(),
+		&razpravljalnica.LikeMessageRequest{
+			UserId:    currentUser.Id,
+			TopicId:   currentTopicID, // <- include TopicId
+			MessageId: messageID,
+		})
+	if err != nil {
+		//log.Println("Error liking message:", err)
+		return
+	}
+
+	
+	// Optional: print liked message to console for debugging
+	//fmt.Printf("Message liked: %d (%s) | Likes: %d\n", msg.Id, msg.Text, msg.Likes)
+}
+
+/* ===================== CREATE TOPIC ===================== */
+func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
+	if currentUser == nil {
+		return
+	}
+
+	form := tview.NewForm()
+	var topicName string
+
+	form.AddInputField("Topic name", "", 30, nil, func(text string) {
+		topicName = text
+	})
+
+	form.AddButton("Create", func() {
+		if topicName == "" {
+			return
+		}
+
+		head, _, err := getClusterState(controlAddr)
+		if err != nil {
+			return
+		}
+
+		client, conn := connectToNode(head.Address)
+		defer conn.Close()
+
+		topic, err := client.CreateTopic(context.Background(), &razpravljalnica.CreateTopicRequest{
+			Name:   topicName,
+		})
+		if err != nil {
+			return
+		}
+
+		currentTopicID = topic.Id // automatically select the new topic
+
+		// reload topics and messages
+		loadTopics(topics, messages, input)
+		loadMessages(messages, currentTopicID)
+
+		// remove modal
+		app.SetRoot(mainUI(), true) // if you insist on creating new UI
+	})
+
+	form.AddButton("Cancel", func() {
+		// simply remove modal and return focus
+		app.SetFocus(topics)
+	})
+
+	form.SetBorder(true).SetTitle("Create Topic").SetTitleAlign(tview.AlignLeft)
+
+	// Use Pages to overlay the form on top of current UI
+	pages := tview.NewPages().
+		AddPage("main", mainUI(), true, true).
+		AddPage("form", form, true, true)
+
+	app.SetRoot(pages, true)
+	app.SetFocus(form)
+}
+
+
+
+/* ===================== MAIN ===================== */
+
+func main() {
+	flag.StringVar(&controlAddr, "addrControl", "localhost:5000", "control plane address")
+	flag.Parse()
+
+	app = tview.NewApplication()
+
+	app.SetRoot(
+		loginScreen(func() {
+			app.SetRoot(mainUI(), true)
+		}),
+		true,
+	)
+
+	if err := app.Run(); err != nil {
+		panic(err)
+	}
+}
