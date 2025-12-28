@@ -397,7 +397,7 @@ func likeMessage(messageID int64) {
 		})
 	if err != nil {
 		app.Stop()
-		log.Fatalf("Error liking message:", err)
+		log.Fatalf("Error liking message: %s", err)
 		return
 	}
 
