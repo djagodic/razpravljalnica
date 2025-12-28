@@ -69,6 +69,7 @@ func getClusterState(addr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina
 func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.ClientConn) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
+		app.Stop()
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
 	}
 	return razpravljalnica.NewMessageBoardClient(conn), conn
@@ -91,7 +92,9 @@ func loginScreen(onSuccess func()) tview.Primitive {
 
 		head, _, err := getClusterState(controlAddr)
 		if err != nil {
-			log.Println(err)
+			app.Stop()
+			fmt.Printf("Failed to connect to control plane at %s to get cluster state\n", controlAddr)
+			log.Fatal(err)
 			return
 		}
 
@@ -105,7 +108,9 @@ func loginScreen(onSuccess func()) tview.Primitive {
 			u, err = client.CreateUser(context.Background(),
 				&razpravljalnica.CreateUserRequest{Name: username})
 			if err != nil {
-				log.Println(err)
+				app.Stop()
+				fmt.Printf("Failed to create user")
+				log.Fatal(err)
 				return
 			}
 		}
@@ -138,7 +143,7 @@ func mainUI() tview.Primitive {
 	input.SetFieldWidth(0)
 
 	help := tview.NewTextView().
-		SetText("Shortcuts (Ctrl +): F1=Input, F3=Topics, F4=Messages, L=Like message, R=Refresh, N=createNewTopic, U=updateMessage, D=deleteMessage").
+		SetText("Shortcuts (Ctrl +): F1=Input, F3=Topics, F4=Messages, L=Like message, R=Refresh, N=createNewTopic, U=updateMessage, D=deleteMessage, S=Subscribe").
 		SetTextColor(tcell.ColorGreen)
 
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
@@ -147,7 +152,7 @@ func mainUI() tview.Primitive {
 	horizontal.AddItem(messages, 0, 3, false)
 	flex.AddItem(horizontal, 0, 1, true)
 	flex.AddItem(input, 3, 0, false)
-	flex.AddItem(help, 1, 0, false)
+	flex.AddItem(help, 2, 0, false)
 
 	loadTopics(topics, messages, input)
 	app.SetFocus(topics)
@@ -391,7 +396,8 @@ func likeMessage(messageID int64) {
 			MessageId: messageID,
 		})
 	if err != nil {
-		//log.Println("Error liking message:", err)
+		app.Stop()
+		log.Fatalf("Error liking message:", err)
 		return
 	}
 
@@ -574,7 +580,8 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 
 	cpConn, err := grpc.Dial(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Println(err)
+		app.Stop()
+		log.Fatal(err)
 		return
 	}
 
@@ -585,13 +592,15 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 			TopicId: []int64{topicID},
 		})
 	if err != nil {
-		log.Println(err)
+		app.Stop()
+		log.Fatal(err)
 		return
 	}
 
 	subConn, err := grpc.Dial(subResp.Node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Println(err)
+		app.Stop()
+		log.Fatal(err)
 		return
 	}
 
@@ -604,7 +613,8 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 			SubscribeToken: subResp.SubscribeToken,
 		})
 	if err != nil {
-		log.Println(err)
+		app.Stop()
+		log.Fatal(err)
 		return
 	}
 
