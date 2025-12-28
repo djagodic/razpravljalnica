@@ -95,7 +95,6 @@ func (c *ControlPlaneServer) RegisterNode(ctx context.Context, req *nadzorna_rav
 		predzadnji := c.nodes[len(c.nodes)-2]
 		zadnji := c.nodes[len(c.nodes)-1]
 		//posljemu prejsnjemu repu obvestilo o novem repu
-		//TODO poslati to se clientom
 		err := c.sendChanges(predzadnji, zadnji, false)
 		if err != nil {
 			return &nadzorna_ravnina.RegisterNodeResponse{

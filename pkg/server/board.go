@@ -52,6 +52,11 @@ func NewMessageBoardServer(nodeId string, isHead, isTail bool) *MessageBoardServ
 	}
 }
 
+// helper for testing
+func (s *MessageBoardServer) SetNextNode(client razpravljalnica.MessageBoardClient) {
+	s.nextNode = client
+}
+
 // nextSequence returns monotonic sequence number
 func (s *MessageBoardServer) nextSequence() int64 {
 	return atomic.AddInt64(&s.seq, 1)
@@ -80,13 +85,13 @@ func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient n
 
 			log.Printf("Next node address received: %s", ev.NextAdress)
 
-			s.connectToNextNode(ev.NextAdress)
+			s.ConnectToNextNode(ev.NextAdress)
 		}
 	}()
 }
 
 // povezi se na naslednji server v verigi
-func (s *MessageBoardServer) connectToNextNode(address string) {
+func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	//ce pride posebno sporocilo gremo in nastavimo novi head node -> namesto posebne funkcije uporabimo kar tole
 	if address == "NewHead1234" {
 		//s.mu.Lock()
@@ -324,7 +329,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	if next != nil {
 		_, err := next.PostMessage(ctx, req)
 		if err != nil {
-			fmt.Print("Error creating topic:", err)
+			fmt.Print("Error posting a message:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
 	}
@@ -406,7 +411,7 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 	if next != nil {
 		_, err := next.UpdateMessage(ctx, req)
 		if err != nil {
-			fmt.Print("Error creating topic:", err)
+			fmt.Print("Error updating a message:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
 	}
@@ -457,7 +462,7 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 	if next != nil {
 		_, err := next.DeleteMessage(ctx, req)
 		if err != nil {
-			fmt.Print("Error creating topic:", err)
+			fmt.Print("Error deleting a message:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
 	}
@@ -492,7 +497,7 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 	if next != nil {
 		_, err := next.LikeMessage(ctx, req)
 		if err != nil {
-			fmt.Print("Error creating topic:", err)
+			fmt.Print("Error liking a message:", err)
 			fmt.Printf("CurrentNode: %s", s.nodeId)
 		}
 	}
