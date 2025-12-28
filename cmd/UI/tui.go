@@ -245,10 +245,7 @@ func mainUI() tview.Primitive {
 					subscribeToTopic(topicID, topics, messages, input) //from current onwards
 					loadTopics(topics, messages, input)
 				}
-
-
 			}
-
 		}
 		return event
 	})
@@ -337,17 +334,6 @@ func loadMessages(list *tview.List, topicID int64) {
 
 	currentMessages = resp.Messages
 
-	// if len(resp.Messages) > 0 {
-	// 	lastSeenMessageID[topicID] = resp.Messages[len(resp.Messages)-1].Id
-
-	// 	// initialize received cursor if not present
-	// 	if _, ok := lastReceivedMessageID[topicID]; !ok {
-	// 		lastReceivedMessageID[topicID] = lastSeenMessageID[topicID]
-	// 	}
-	// } else {
-	// 	lastSeenMessageID[topicID] = 0
-	// }
-
 	// user is now viewing → clear notification
 	topicHasUpdates[topicID] = false
 
@@ -397,11 +383,10 @@ func likeMessage(messageID int64) {
 		})
 	if err != nil {
 		app.Stop()
-		log.Fatalf("Error liking message:", err)
+		log.Fatalf("Error liking message: %s", err)
 		return
 	}
 
-	
 	// Optional: print liked message to console for debugging
 	//fmt.Printf("Message liked: %d (%s) | Likes: %d\n", msg.Id, msg.Text, msg.Likes)
 }
