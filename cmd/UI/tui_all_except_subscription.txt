@@ -346,29 +346,33 @@ func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
 		defer conn.Close()
 
 		topic, err := client.CreateTopic(context.Background(), &razpravljalnica.CreateTopicRequest{
-			Name: topicName,
+			Name:   topicName,
 		})
 		if err != nil {
 			return
 		}
 
-		currentTopicID = topic.Id
+		currentTopicID = topic.Id // automatically select the new topic
+
+		// reload topics and messages
 		loadTopics(topics, messages, input)
 		loadMessages(messages, currentTopicID)
 
-		pages.RemovePage("create")
-		app.SetFocus(input)
+		// remove modal
+		app.SetRoot(mainUI(), true) // if you insist on creating new UI
 	})
 
 	form.AddButton("Cancel", func() {
-		pages.RemovePage("create")
-		app.SetFocus(input)
+		// simply remove modal and return focus
+		app.SetFocus(topics)
 	})
 
 	form.SetBorder(true).SetTitle("Create Topic").SetTitleAlign(tview.AlignLeft)
 
-	pages.AddPage("create", form, true, true)
+	// Use Pages to overlay the form on top of current UI
+	pages.AddPage("form", form, true, true)
 	app.SetFocus(form)
+
 }
 
 /* ===================== UPDATE MESSAGE ===================== */
@@ -411,12 +415,12 @@ func updateMessagePrompt(messages *tview.List, input *tview.InputField) {
 		}
 
 		loadMessages(messages, currentTopicID)
-		pages.RemovePage("update")
+		pages.HidePage("update")
 		app.SetFocus(input)
 	})
 
 	form.AddButton("Cancel", func() {
-		pages.RemovePage("update")
+		pages.HidePage("update")
 		app.SetFocus(input)
 	})
 
@@ -440,37 +444,39 @@ func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 		return
 	}
 
-	modal := tview.NewModal().
-		SetText("Do you really want to delete this message?").
-		AddButtons([]string{"Delete", "Cancel"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "Delete" {
-				head, _, err := getClusterState(controlAddr)
-				if err != nil {
-					return
-				}
+	form := tview.NewForm()
+	form.AddButton("Delete", func() {
+		head, _, err := getClusterState(controlAddr)
+		if err != nil {
+			return
+		}
 
-				client, conn := connectToNode(head.Address)
-				defer conn.Close()
+		client, conn := connectToNode(head.Address)
+		defer conn.Close()
 
-				_, err = client.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
-					UserId:    currentUser.Id,
-					TopicId:   currentTopicID,
-					MessageId: msg.Id,
-				})
-				if err != nil {
-					return
-				}
-
-				loadMessages(messages, currentTopicID)
-			}
-			// Close modal in both cases
-			pages.RemovePage("delete")
-			app.SetFocus(input)
+		_, err = client.DeleteMessage(context.Background(), &razpravljalnica.DeleteMessageRequest{
+			UserId:    currentUser.Id,
+			TopicId:   currentTopicID,
+			MessageId: msg.Id,
 		})
+		if err != nil {
+			return
+		}
 
-	pages.AddPage("delete", modal, true, true)
-	app.SetFocus(modal)
+		loadMessages(messages, currentTopicID)
+		pages.HidePage("delete")
+		app.SetFocus(input)
+	})
+
+	form.AddButton("Cancel", func() {
+		pages.HidePage("delete")
+		app.SetFocus(input)
+	})
+
+	form.SetBorder(true).SetTitle("Do you really want to delete message?").SetTitleAlign(tview.AlignLeft)
+
+	pages.AddPage("delete", form, true, true)
+	app.SetFocus(form)
 }
 
 
