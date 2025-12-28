@@ -48,6 +48,7 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, controlAddr string) {
 	ctx := context.Background()
 
+	//povezemo se z nadzorno ravnino
 	cpConn, err := grpc.NewClient(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to control plane: %v", err)
@@ -90,7 +91,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 		for {
 			ev, err := stream.Recv()
 			if err != nil {
-				log.Printf("Subscription ended: %v", err)
+				log.Printf("Subscription ended: \n%v", err)
 				return
 			}
 			fmt.Printf("[EVENT] %v | Topic %d (%s) | User %d (%s): %d (%s) (Likes: %d)\n",
@@ -100,6 +101,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 	fmt.Println("Subscription started in background")
 }
 
+// user login funkcija
 func loginUser(headClient razpravljalnica.MessageBoardClient) (*razpravljalnica.User, error) {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -162,14 +164,15 @@ func main() {
 
 	fmt.Println("Interactive Razpravljalnica CLI")
 	log.Println("Commands:\n createtopic <name>,          post <topic_id> <text>,         update <topic_id> <msg_id> <text>,\n delete <topic_id> <msg_id>,  like <topic_id> <msg_id>,       listtopics,\n listmessages <topic_id>,     subscribe <fromMessageId> <topicId1,topicId2,...>,\n exit")
-	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
 
+	//login page
 	currentUser, err := loginUser(headClient)
 	for err != nil {
 		currentUser, err = loginUser(headClient)
 	}
 	connHead.Close()
 
+	//zacnemo CLI
 	for {
 		fmt.Print("> ")
 		line, _ := reader.ReadString('\n')

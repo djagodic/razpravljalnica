@@ -234,6 +234,7 @@ func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzo
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	//pridobi ziva vozlisca
 	var alive []*NodeInfo
 	for _, n := range c.nodes {
 		if n.Alive {
@@ -241,6 +242,7 @@ func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzo
 		}
 	}
 
+	//preveri ce je sploh kako vozlisce zivo
 	if len(alive) == 0 {
 		return nil, status.Error(
 			codes.Unavailable,
@@ -248,14 +250,15 @@ func (c *ControlPlaneServer) GetSubscriptionNode(ctx context.Context, req *nadzo
 		)
 	}
 
+	//na podlagi userID, in topicId kamor zelis biti subscriban doloci na kateri node bos poslan
 	sum := req.UserId
 	for _, t := range req.TopicId {
 		sum += t
 	}
-
 	idx := sum % int64(len(alive))
 	node := alive[idx]
 
+	//token za preverjanje dovoljenj za subscription
 	token := fmt.Sprintf(
 		"%s:%d:%d",
 		node.NodeID,
@@ -282,6 +285,7 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 	var change *nadzorna_ravnina.Changes
 	if naslednji == nil {
 		if isNewHead {
+			//posebno sporocilo ki pove serverju da je on glava
 			change = &nadzorna_ravnina.Changes{NextAdress: "NewHead1234"}
 		} else {
 			//ce hocemo nastaviti naslednjega na nil bomo poslali prazen string
@@ -295,13 +299,13 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 
 	//pridobimo kanal predzadnjega, dodana bralna ključavnica
 	//s.mu.RLock()
-    ch := s.subToChanges[trenuten.NodeID]
-    //s.mu.RUnlock()
+	ch := s.subToChanges[trenuten.NodeID]
+	//s.mu.RUnlock()
 
 	//chatko shit, pomoje nepotrebno
-    if ch == nil {
-        return nil
-    }
+	if ch == nil {
+		return nil
+	}
 
 	select {
 	case ch <- change:
@@ -315,20 +319,19 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 // grpc SiuubscribeToChanges
 func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
-	
+
 	//dodal sem zaklepanje med nastavljanjem channela za nextNode
 	//s.mu.Lock()
-    s.subToChanges[req.NodeId] = ch
-    //s.mu.Unlock()
+	s.subToChanges[req.NodeId] = ch
+	//s.mu.Unlock()
 
 	//ko bo vse skupaj crashnilo zbrišem kanal
-    // defer func() {
-    //     s.mu.Lock()
-    //     delete(s.subToChanges, req.NodeId)
-    //     close(ch)
-    //     s.mu.Unlock()
-    // }()
-
+	// defer func() {
+	//     s.mu.Lock()
+	//     delete(s.subToChanges, req.NodeId)
+	//     close(ch)
+	//     s.mu.Unlock()
+	// }()
 
 	//stream new messages
 	go func(ch chan *nadzorna_ravnina.Changes) {

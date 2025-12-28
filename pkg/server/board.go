@@ -92,7 +92,7 @@ func (s *MessageBoardServer) connectToNextNode(address string) {
 		//s.mu.Lock()
 		s.IsHead = true
 		//s.mu.Unlock()
-		log.Printf("Nastavilu smo nov head node, stanje Head: %t", s.IsHead)
+		log.Printf("Nastavili smo nov head node, stanje Head: %t", s.IsHead)
 		return
 	}
 
@@ -113,23 +113,23 @@ func (s *MessageBoardServer) connectToNextNode(address string) {
 	//s.mu.Lock()
 	client := razpravljalnica.NewMessageBoardClient(conn)
 
-	// 🔒 freeze replication
+	// freeze replication
 	s.mu.Lock()
 	s.nextNode = nil
 	s.IsTail = false
 	s.mu.Unlock()
 
-	// 📦 build snapshot
+	// build snapshot
 	snap := s.storage.BuildSnapshot()
 
-	// 🚀 send snapshot
+	//send snapshot
 	_, err = client.InstallSnapshot(context.Background(), snap)
 	if err != nil {
 		log.Printf("snapshot failed: %v", err)
 		return
 	}
 
-	// ✅ ACK implied by RPC success
+	// ACK implied by RPC success
 	s.mu.Lock()
 	s.nextNode = client
 	s.mu.Unlock()
@@ -139,57 +139,56 @@ func (s *MessageBoardServer) connectToNextNode(address string) {
 }
 
 func (s *MessageBoardServer) InstallSnapshot(
-    ctx context.Context,
-    snap *razpravljalnica.StorageSnapshot,
+	ctx context.Context,
+	snap *razpravljalnica.StorageSnapshot,
 ) (*emptypb.Empty, error) {
 
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-    log.Printf("[%s] Installing snapshot", s.nodeId)
+	log.Printf("[%s] Installing snapshot", s.nodeId)
 
-    // reset current storage
-    s.storage.Reset()
+	// reset current storage
+	s.storage.Reset()
 
-    maxUserId := int64(0)
-    maxTopicId := int64(0)
-    maxMessageId := int64(0)
+	maxUserId := int64(0)
+	maxTopicId := int64(0)
+	maxMessageId := int64(0)
 
-    // restore users
-    for _, u := range snap.Users {
-        s.storage.AddUser(u)
-        if u.Id > maxUserId {
-            maxUserId = u.Id
-        }
-    }
+	// restore users
+	for _, u := range snap.Users {
+		s.storage.AddUser(u)
+		if u.Id > maxUserId {
+			maxUserId = u.Id
+		}
+	}
 
-    // restore topics
-    for _, t := range snap.Topics {
-        s.storage.AddTopic(t)
-        if t.Id > maxTopicId {
-            maxTopicId = t.Id
-        }
-    }
+	// restore topics
+	for _, t := range snap.Topics {
+		s.storage.AddTopic(t)
+		if t.Id > maxTopicId {
+			maxTopicId = t.Id
+		}
+	}
 
-    // restore messages
-    for _, m := range snap.Messages {
-        s.storage.AddMessage(m)
-        if m.Id > maxMessageId {
-            maxMessageId = m.Id
-        }
-    }
+	// restore messages
+	for _, m := range snap.Messages {
+		s.storage.AddMessage(m)
+		if m.Id > maxMessageId {
+			maxMessageId = m.Id
+		}
+	}
 
-    // update global next IDs
-    nextUserId = maxUserId + 1
-    nextTopicId = maxTopicId + 1
-    nextMessageId = maxMessageId + 1
+	// update global next IDs
+	nextUserId = maxUserId + 1
+	nextTopicId = maxTopicId + 1
+	nextMessageId = maxMessageId + 1
 
-    log.Printf("[%s] Snapshot installed, nextUserId=%d, nextTopicId=%d, nextMessageId=%d",
-        s.nodeId, nextUserId, nextTopicId, nextMessageId)
+	log.Printf("[%s] Snapshot installed, nextUserId=%d, nextTopicId=%d, nextMessageId=%d",
+		s.nodeId, nextUserId, nextTopicId, nextMessageId)
 
-    return &emptypb.Empty{}, nil
+	return &emptypb.Empty{}, nil
 }
-
 
 func (s *NodeStorage) BuildSnapshot() *razpravljalnica.StorageSnapshot {
 	return &razpravljalnica.StorageSnapshot{
@@ -198,7 +197,6 @@ func (s *NodeStorage) BuildSnapshot() *razpravljalnica.StorageSnapshot {
 		Messages: s.ListAllMessages(),
 	}
 }
-
 
 // ------------------------ gRPC methods -----------------------------
 func (s *MessageBoardServer) GetUser(ctx context.Context, req *razpravljalnica.GetUserRequest) (*razpravljalnica.User, error) {
