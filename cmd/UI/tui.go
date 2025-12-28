@@ -31,6 +31,19 @@ var (
 
 var pages *tview.Pages
 
+// topicID -> cancel subscription
+var activeSubscriptions = make(map[int64]context.CancelFunc)
+
+// topicID -> has unseen updates
+var topicHasUpdates = make(map[int64]bool)
+
+// topicID -> last received message ID (subscription cursor)
+var lastReceivedMessageID = make(map[int64]int64)
+
+// topicID -> last message ID user has seen
+var lastSeenMessageID = make(map[int64]int64)
+
+
 /* ===================== gRPC HELPERS ===================== */
 
 func getClusterState(addr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
@@ -112,11 +125,13 @@ func mainUI() tview.Primitive {
 	topics := tview.NewList()
 	topics.SetBorder(true)
 	topics.SetTitle("Topics")
+	topics.SetHighlightFullLine(true)
 
 	// Use List instead of TextView to allow selecting messages
 	messages := tview.NewList()
 	messages.SetBorder(true)
 	messages.SetTitle("Messages")
+	messages.SetHighlightFullLine(true)
 
 	input := tview.NewInputField()
 	input.SetLabel("Message: ")
@@ -165,6 +180,7 @@ func mainUI() tview.Primitive {
 		if err == nil {
 			input.SetText("")
 			loadMessages(messages, currentTopicID)
+			loadTopics(topics, messages, input)
 		}
 	})
 
@@ -184,20 +200,47 @@ func mainUI() tview.Primitive {
 				if currentTopicID != 0 {
 					loadMessages(messages, currentTopicID)
 				}
+				loadTopics(topics, messages, input)
 				app.SetFocus(messages)
 			case tcell.KeyCtrlL: // like selected message
 				index := messages.GetCurrentItem()
 				if index >= 0 && index < len(currentMessages) {
 					likeMessage(currentMessages[index].Id)
 					loadMessages(messages, currentTopicID)
-					//app.Draw() // force redraw after updating the list
+					loadTopics(topics, messages, input)
 				}
 			case tcell.KeyCtrlN: // Ctrl+N -> create topic
 				createTopicPrompt(topics, messages, input)
+				loadTopics(topics, messages, input)
 			case tcell.KeyCtrlU:
 				updateMessagePrompt(messages, input)
+				loadTopics(topics, messages, input)
 			case tcell.KeyCtrlD:
     			deleteMessagePrompt(messages, input)
+				loadTopics(topics, messages, input)
+			case tcell.KeyCtrlS: // Ctrl+S -> subscribe to currently selected topic
+				index := topics.GetCurrentItem()
+				if index < 0 {
+					break
+				}
+
+				itemText, _ := topics.GetItemText(index)
+				var topicID int64
+				_, err := fmt.Sscanf(itemText, "%d:", &topicID)
+				if err != nil {
+					break
+				}
+
+				if cancel, ok := activeSubscriptions[topicID]; ok {
+					cancel()
+					delete(activeSubscriptions, topicID)
+					//log.Printf("Unsubscribed from topic %d\n", topicID)
+					loadTopics(topics, messages, input)
+				} else {
+					subscribeToTopic(topicID, topics, messages, input) //from current onwards
+					loadTopics(topics, messages, input)
+				}
+
 
 			}
 
@@ -212,8 +255,9 @@ func mainUI() tview.Primitive {
 
 }
 
-/* ===================== DATA LOADING ===================== */
+/* ===================== TOPIC LOADING ===================== */
 func loadTopics(topics, messages *tview.List, input *tview.InputField) {
+	selected := topics.GetCurrentItem()
 	_, tail, err := getClusterState(controlAddr)
 	if err != nil {
 		return
@@ -235,8 +279,19 @@ func loadTopics(topics, messages *tview.List, input *tview.InputField) {
 	topics.Clear()
 	for _, t := range resp.Topics {
 		topicID := t.Id
+
+		label := fmt.Sprintf("%d: %s", t.Id, t.Name)
+
+		if _, ok := activeSubscriptions[t.Id]; ok {
+			if lastReceivedMessageID[t.Id] > lastSeenMessageID[t.Id] {
+				label = fmt.Sprintf("%s  [green]S*[-] 🔔", label)
+			} else {
+				label = fmt.Sprintf("%s  [green]S[-]", label)
+			}
+		}
+
 		topics.AddItem(
-			fmt.Sprintf("%d: %s", t.Id, t.Name),
+			label,
 			"",
 			0,
 			func() {
@@ -246,6 +301,11 @@ func loadTopics(topics, messages *tview.List, input *tview.InputField) {
 			},
 		)
 	}
+
+	if selected >= 0 && selected < topics.GetItemCount() {
+		topics.SetCurrentItem(selected)
+	}
+
 }
 
 /* ===================== LOAD MESSAGES ===================== */
@@ -271,21 +331,42 @@ func loadMessages(list *tview.List, topicID int64) {
 	}
 
 	currentMessages = resp.Messages
+
+	// if len(resp.Messages) > 0 {
+	// 	lastSeenMessageID[topicID] = resp.Messages[len(resp.Messages)-1].Id
+
+	// 	// initialize received cursor if not present
+	// 	if _, ok := lastReceivedMessageID[topicID]; !ok {
+	// 		lastReceivedMessageID[topicID] = lastSeenMessageID[topicID]
+	// 	}
+	// } else {
+	// 	lastSeenMessageID[topicID] = 0
+	// }
+
+	// user is now viewing → clear notification
+	topicHasUpdates[topicID] = false
+
 	for _, m := range resp.Messages {
-		list.AddItem(
-			fmt.Sprintf("[yellow]%s[-]: %s [gray](❤️ %d)[-]", m.UserName, m.Text, m.Likes),
-			"",
-			0,
-			nil,
-		)
+		label := fmt.Sprintf("[yellow]%s[-]: %s [gray](❤️ %d)[-]",
+			m.UserName, m.Text, m.Likes)
+
+		if m.Id > lastSeenMessageID[topicID] {
+			label = fmt.Sprintf("%s [red]NEW[-] ✨", label)
+		}
+
+		list.AddItem(label, "", 0, nil)
 	}
 
 	// focus on last message
 	if len(currentMessages) > 0 {
 		list.SetCurrentItem(len(currentMessages) - 1)
 	}
-	//app.Draw() // force redraw
 
+	if len(resp.Messages) > 0 {
+		lastSeenMessageID[topicID] = resp.Messages[len(resp.Messages)-1].Id
+	}
+
+	//TODO: try to refresh topics here, so * gets erased when subscriber views new messages
 }
 
 /* ===================== LIKE MESSAGE ===================== */
@@ -353,8 +434,8 @@ func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
 		}
 
 		currentTopicID = topic.Id
-		loadTopics(topics, messages, input)
 		loadMessages(messages, currentTopicID)
+		loadTopics(topics, messages, input)
 
 		pages.RemovePage("create")
 		app.SetFocus(input)
@@ -471,6 +552,104 @@ func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 
 	pages.AddPage("delete", modal, true, true)
 	app.SetFocus(modal)
+}
+
+/* ===================== SUBSCRIPTION ===================== */
+func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tview.InputField) {
+	if currentUser == nil {
+		return
+	}
+
+	// toggle unsubscribe
+	if cancel, ok := activeSubscriptions[topicID]; ok {
+		cancel()
+		delete(activeSubscriptions, topicID)
+		return
+	}
+
+	fromID := lastReceivedMessageID[topicID]
+
+	ctx, cancel := context.WithCancel(context.Background())
+	activeSubscriptions[topicID] = cancel
+
+	cpConn, err := grpc.Dial(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	cpClient := nadzorna_ravnina.NewControlPlaneClient(cpConn)
+	subResp, err := cpClient.GetSubscriptionNode(ctx,
+		&nadzorna_ravnina.SubscriptionNodeRequest{
+			UserId:  currentUser.Id,
+			TopicId: []int64{topicID},
+		})
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	subConn, err := grpc.Dial(subResp.Node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	subClient := razpravljalnica.NewMessageBoardClient(subConn)
+	stream, err := subClient.SubscribeTopic(ctx,
+		&razpravljalnica.SubscribeTopicRequest{
+			UserId:         currentUser.Id,
+			TopicId:        []int64{topicID},
+			FromMessageId:  fromID + 1,
+			SubscribeToken: subResp.SubscribeToken,
+		})
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	go func() {
+		defer subConn.Close()
+		defer cpConn.Close()
+
+		for {
+			ev, err := stream.Recv()
+			if err != nil {
+				delete(activeSubscriptions, topicID)
+				return
+			}
+
+			lastReceivedMessageID[topicID] = ev.Message.Id
+
+			app.QueueUpdateDraw(func() {
+				if topicID == currentTopicID {
+					// visible → update UI
+					currentMessages = append(currentMessages, ev.Message)
+
+					label := fmt.Sprintf("[yellow]%s[-]: %s [gray](❤️ %d)[-]",
+						ev.Message.UserName,
+						ev.Message.Text,
+						ev.Message.Likes,
+					)
+
+					if ev.Message.Id > lastSeenMessageID[topicID] {
+						label = fmt.Sprintf("%s [red]NEW[-] ✨", label)
+					}
+
+					messagesList.AddItem(label, "", 0, nil)
+
+					messagesList.SetCurrentItem(len(currentMessages) - 1)
+
+					lastSeenMessageID[topicID] = ev.Message.Id
+
+				} else {
+					// not visible → mark topic
+					topicHasUpdates[topicID] = true
+					loadTopics(topics, messagesList, input)
+				}
+			})
+		}
+	}()
 }
 
 
