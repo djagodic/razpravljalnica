@@ -19,8 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-/* ===================== GLOBALS ===================== */
-
+/* ===================== GLOBALNE ===================== */
 var (
 	controlAddr     string
 	currentUser     *razpravljalnica.User
@@ -31,21 +30,19 @@ var (
 
 var pages *tview.Pages
 
-// topicID -> cancel subscription
+// topicID -> preklici subscription
 var activeSubscriptions = make(map[int64]context.CancelFunc)
 
-// topicID -> has unseen updates
+// topicID -> hrani nevidene spremembe
 var topicHasUpdates = make(map[int64]bool)
 
-// topicID -> last received message ID (subscription cursor)
+// topicID -> zadnji dobljeni message ID (subscription kazalec)
 var lastReceivedMessageID = make(map[int64]int64)
 
-// topicID -> last message ID user has seen
+// topicID -> zadnji message ID, ki ga je user videl
 var lastSeenMessageID = make(map[int64]int64)
 
-
 /* ===================== gRPC HELPERS ===================== */
-
 func getClusterState(addr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -76,7 +73,6 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 }
 
 /* ===================== UI SCREENS ===================== */
-
 func loginScreen(onSuccess func()) tview.Primitive {
 	form := tview.NewForm()
 	var username string
@@ -132,7 +128,7 @@ func mainUI() tview.Primitive {
 	topics.SetTitle("Topics")
 	topics.SetHighlightFullLine(true)
 
-	// Use List instead of TextView to allow selecting messages
+	// uporabim List namesto TextView, da lahko izbiram sporocila
 	messages := tview.NewList()
 	messages.SetBorder(true)
 	messages.SetTitle("Messages")
@@ -207,14 +203,14 @@ func mainUI() tview.Primitive {
 				}
 				loadTopics(topics, messages, input)
 				app.SetFocus(messages)
-			case tcell.KeyCtrlL: // like selected message
+			case tcell.KeyCtrlL: // like izbranega sporocila
 				index := messages.GetCurrentItem()
 				if index >= 0 && index < len(currentMessages) {
 					likeMessage(currentMessages[index].Id)
 					loadMessages(messages, currentTopicID)
 					loadTopics(topics, messages, input)
 				}
-			case tcell.KeyCtrlN: // Ctrl+N -> create topic
+			case tcell.KeyCtrlN: // Ctrl+N -> naredi novo temo
 				createTopicPrompt(topics, messages, input)
 				loadTopics(topics, messages, input)
 			case tcell.KeyCtrlU:
@@ -223,7 +219,7 @@ func mainUI() tview.Primitive {
 			case tcell.KeyCtrlD:
     			deleteMessagePrompt(messages, input)
 				loadTopics(topics, messages, input)
-			case tcell.KeyCtrlS: // Ctrl+S -> subscribe to currently selected topic
+			case tcell.KeyCtrlS: // Ctrl+S -> subscribe na trenutno izbrano temo
 				index := topics.GetCurrentItem()
 				if index < 0 {
 					break
@@ -242,7 +238,7 @@ func mainUI() tview.Primitive {
 					//log.Printf("Unsubscribed from topic %d\n", topicID)
 					loadTopics(topics, messages, input)
 				} else {
-					subscribeToTopic(topicID, topics, messages, input) //from current onwards
+					subscribeToTopic(topicID, topics, messages, input) // od trenutnega message Id naprej delam subscribe
 					loadTopics(topics, messages, input)
 				}
 			}
@@ -273,7 +269,7 @@ func loadTopics(topics, messages *tview.List, input *tview.InputField) {
 		return
 	}
 
-	// Sort topics by Id
+	// sortiraj teme po Id
 	sort.Slice(resp.Topics, func(i, j int) bool {
 		return resp.Topics[i].Id < resp.Topics[j].Id
 	})
@@ -299,7 +295,7 @@ func loadTopics(topics, messages *tview.List, input *tview.InputField) {
 			func() {
 				currentTopicID = topicID
 				loadMessages(messages, topicID)
-				app.SetFocus(input) // focus input after selecting topic
+				app.SetFocus(input) // po izbiri teme dej fokus na input
 			},
 		)
 	}
@@ -334,7 +330,7 @@ func loadMessages(list *tview.List, topicID int64) {
 
 	currentMessages = resp.Messages
 
-	// user is now viewing → clear notification
+	// user zdej gleda -> pocisti obvestila
 	topicHasUpdates[topicID] = false
 
 	for _, m := range resp.Messages {
@@ -348,7 +344,7 @@ func loadMessages(list *tview.List, topicID int64) {
 		list.AddItem(label, "", 0, nil)
 	}
 
-	// focus on last message
+	// fokus na zadnje sporocilo
 	if len(currentMessages) > 0 {
 		list.SetCurrentItem(len(currentMessages) - 1)
 	}
@@ -357,7 +353,7 @@ func loadMessages(list *tview.List, topicID int64) {
 		lastSeenMessageID[topicID] = resp.Messages[len(resp.Messages)-1].Id
 	}
 
-	//TODO: try to refresh topics here, so * gets erased when subscriber views new messages
+	//TODO: poskusi narediti refresh tem tukaj, da se * pobrise ko subscriber pogleda spororocila
 }
 
 /* ===================== LIKE MESSAGE ===================== */
@@ -387,7 +383,7 @@ func likeMessage(messageID int64) {
 		return
 	}
 
-	// Optional: print liked message to console for debugging
+	// printaj liked sporocila v konsolo za debug
 	//fmt.Printf("Message liked: %d (%s) | Likes: %d\n", msg.Id, msg.Text, msg.Likes)
 }
 
@@ -452,7 +448,7 @@ func updateMessagePrompt(messages *tview.List, input *tview.InputField) {
 
 	msg := currentMessages[index]
 	if currentUser == nil || msg.UserId != currentUser.Id {
-		// Only allow updating own messages
+		// dovoli posodobit le lastna sporocila
 		return
 	}
 
@@ -508,7 +504,7 @@ func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 
 	msg := currentMessages[index]
 	if currentUser == nil || msg.UserId != currentUser.Id {
-		// Only allow deleting own messages
+		// dovoli brisat le lastna sporocila
 		return
 	}
 
@@ -536,7 +532,7 @@ func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 
 				loadMessages(messages, currentTopicID)
 			}
-			// Close modal in both cases
+			// zapri modal v obeh primerih
 			pages.RemovePage("delete")
 			app.SetFocus(input)
 		})
@@ -551,7 +547,7 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 		return
 	}
 
-	// toggle unsubscribe
+	// preklaplaj unsubscribe
 	if cancel, ok := activeSubscriptions[topicID]; ok {
 		cancel()
 		delete(activeSubscriptions, topicID)
@@ -618,7 +614,7 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 
 			app.QueueUpdateDraw(func() {
 				if topicID == currentTopicID {
-					// visible → update UI
+					// ce gledam (trenutna tema je tudi tista na katero subscribam -> posodobi UI
 					currentMessages = append(currentMessages, ev.Message)
 
 					label := fmt.Sprintf("[yellow]%s[-]: %s [gray](❤️ %d)[-]",
@@ -638,7 +634,7 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 					lastSeenMessageID[topicID] = ev.Message.Id
 
 				} else {
-					// not visible → mark topic
+					// ne gledam -> oznaci temo
 					topicHasUpdates[topicID] = true
 					loadTopics(topics, messagesList, input)
 				}

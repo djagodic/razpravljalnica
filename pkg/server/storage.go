@@ -8,7 +8,7 @@ import (
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 )
 
-// NodeStorage holds all in-memory data per node
+// NodeStorage hrani vse podatke v pomnilniku za posamezno vozlisce
 type NodeStorage struct {
 	mu sync.RWMutex
 
@@ -17,7 +17,7 @@ type NodeStorage struct {
 	comments map[int64]map[int64]*razpravljalnica.Message // topicId -> commentId -> Message
 }
 
-// NewNodeStorage creates empty storage
+// NewNodeStorage ustvari prazno shrambo
 func NewNodeStorage() *NodeStorage {
 	return &NodeStorage{
 		users:    make(map[int64]*razpravljalnica.User),
@@ -26,7 +26,7 @@ func NewNodeStorage() *NodeStorage {
 	}
 }
 
-// get user by name
+// pridobi uporabnika po imenu
 func (s *NodeStorage) GetUserByName(name string) *razpravljalnica.User {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -44,28 +44,28 @@ func (s *NodeStorage) GetUserByName(name string) *razpravljalnica.User {
 	return nil
 }
 
-//dodano zato, da lahko dobivam imena iz userId, ki jih imamo v message-ih
+// dodano zato, da lahko dobivam imena iz userId, ki jih imamo v message-ih
 func (ns *NodeStorage) GetUserById(id int64) *razpravljalnica.User {
 	ns.mu.RLock()
 	defer ns.mu.RUnlock()
 	return ns.users[id] // assuming ns.users map[int64]*User
 }
 
-//dodano zato, da lahko dobivam topice iz topicId, ki jih imamo v message-ih
+// dodano zato, da lahko dobivam topice iz topicId, ki jih imamo v message-ih
 func (ns *NodeStorage) GetTopicById(id int64) *razpravljalnica.Topic {
 	ns.mu.RLock()
 	defer ns.mu.RUnlock()
 	return ns.topics[id] // assuming ns.users map[int64]*User
 }
 
-// AddUser adds a new user
+// AddUser doda novega uporabnika
 func (s *NodeStorage) AddUser(u *razpravljalnica.User) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.users[u.Id] = u
 }
 
-// AddTopic adds a new topic
+// AddTopic doda novo temo
 func (s *NodeStorage) AddTopic(t *razpravljalnica.Topic) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -75,7 +75,7 @@ func (s *NodeStorage) AddTopic(t *razpravljalnica.Topic) {
 	}
 }
 
-// ListTopics returns all topics
+// ListTopics vrne vse teme
 func (s *NodeStorage) ListTopics() []*razpravljalnica.Topic {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -88,7 +88,7 @@ func (s *NodeStorage) ListTopics() []*razpravljalnica.Topic {
 	return topics
 }
 
-// AddMessage adds a comment
+// AddMessage doda sporocilo
 func (s *NodeStorage) AddMessage(c *razpravljalnica.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,18 +103,18 @@ func (s *NodeStorage) GetMessage(topicId, messageId int64) (*razpravljalnica.Mes
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check if topic exists
+	// preveri ali tema obstaja
 	if _, ok := s.topics[topicId]; !ok {
 		return nil, errors.New("topic not found")
 	}
 
-	// Check if messages exist for the topic
+	// preveri ali obstajajo sporocila za temo
 	commentsByTopic, ok := s.comments[topicId]
 	if !ok {
 		return nil, errors.New("no messages for topic")
 	}
 
-	// Retrieve message
+	// pridobi sporocilo
 	msg, ok := commentsByTopic[messageId]
 	if !ok {
 		return nil, errors.New("message not found")
@@ -123,18 +123,14 @@ func (s *NodeStorage) GetMessage(topicId, messageId int64) (*razpravljalnica.Mes
 	return msg, nil
 }
 
-// GetMessages returns messages for a topic starting after fromMessageId,
-// limited to at most limit messages.
-func (s *NodeStorage) GetMessages(
-	topicId int64,
-	fromMessageId int64,
-	limit int,
-) ([]*razpravljalnica.Message, error) {
+// GetMessages vrne sporocila za temo, zacetek po fromMessageId,
+// omejeno na najvec limit sporocil
+func (s *NodeStorage) GetMessages(topicId int64, fromMessageId int64, limit int) ([]*razpravljalnica.Message, error) {
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Validate topic
+	// preveri veljavnost teme
 	if _, ok := s.topics[topicId]; !ok {
 		return nil, errors.New("topic not found")
 	}
@@ -144,7 +140,7 @@ func (s *NodeStorage) GetMessages(
 		return nil, errors.New("no messages for topic")
 	}
 
-	// Collect eligible messages
+	// zberi ustrezna sporocila
 	messages := make([]*razpravljalnica.Message, 0, len(commentsByTopic))
 	for _, msg := range commentsByTopic {
 		if msg.Id >= fromMessageId {
@@ -156,12 +152,12 @@ func (s *NodeStorage) GetMessages(
 		return []*razpravljalnica.Message{}, nil
 	}
 
-	// Ensure deterministic order
+	// zagotovi determinicen vrstni red
 	sort.Slice(messages, func(i, j int) bool {
 		return messages[i].Id < messages[j].Id
 	})
 
-	// Apply limit
+	// uporabi omejitev
 	if limit > 0 && len(messages) > limit {
 		messages = messages[:limit]
 	}
@@ -169,7 +165,7 @@ func (s *NodeStorage) GetMessages(
 	return messages, nil
 }
 
-// UpdateMessage updates a comment (only by author)
+// UpdateMessage posodobi sporocilo (samo avtor)
 func (s *NodeStorage) UpdateMessage(c *razpravljalnica.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -188,7 +184,7 @@ func (s *NodeStorage) UpdateMessage(c *razpravljalnica.Message) error {
 	return nil
 }
 
-// DeleteMessage deletes a comment (only by author)
+// DeleteMessage izbrise sporocilo (samo avtor)
 func (s *NodeStorage) DeleteMessage(topicId, commentId, userId int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -207,7 +203,7 @@ func (s *NodeStorage) DeleteMessage(topicId, commentId, userId int64) error {
 	return nil
 }
 
-// LikeMessage increments likes
+// LikeMessage poveca stevilo like-ov (vseckov i guess)
 func (s *NodeStorage) LikeMessage(topicId, commentId int64) (*razpravljalnica.Message, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -223,7 +219,7 @@ func (s *NodeStorage) LikeMessage(topicId, commentId int64) (*razpravljalnica.Me
 	return c, nil
 }
 
-//dodane funkcije za podporo snapshota -> kopiranje baze na novi tail
+// dodane funkcije za podporo snapshota -> kopiranje baze na novi tail
 func (s *NodeStorage) ListAllMessages() []*razpravljalnica.Message {
     s.mu.RLock()
     defer s.mu.RUnlock()
@@ -248,7 +244,7 @@ func (s *NodeStorage) ListUsers() []*razpravljalnica.User {
     return res
 }
 
-//funkcija ki zbrise celo bazo -> uporabi se pred namestitivijo snapshota na novem tailu (pomoje nepotrebno)
+// funkcija ki zbrise celo bazo -> uporabi se pred namestitivijo snapshota na novem tailu (pomoje nepotrebno)
 func (s *NodeStorage) Reset() {
     s.mu.Lock()
     defer s.mu.Unlock()

@@ -84,7 +84,7 @@ service  MessageBoard{
   // Like an existing message. Return the message with the new number of likes.
   rpc LikeMessage(LikeMessageRequest) returns (Message);
 
-  // // Request a node to which a subscription can be opened.
+  // // Request a node to which a subscription can be opened. -> prestavljeni v nadzornaRavnina.proto
   // rpc GetSubcscriptionNode(SubscriptionNodeRequest) returns (SubscriptionNodeResponse);
 
   // Reads go to the tail node

@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// ------------------------ StartHeartbeat ------------------------
+// zacni heartbeat
 func startHeartbeat(cpAddr, nodeID string) {
 	conn, err := grpc.NewClient(cpAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -40,7 +40,7 @@ func main() {
 	//isTail := flag.Bool("tail", false, "is tail")
 	flag.Parse()
 
-	//povezemo se na nadzorno ravnino kot client
+	// povezemo se na nadzorno ravnino kot client
 	conn, err := grpc.NewClient(*addrControl, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
@@ -50,52 +50,51 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	//naredimo Register node request
+	// naredimo Register node request
 	req := &nadzorna_ravnina.RegisterNodeRequest{
 		NodeId:  *nodeID,
 		Address: *addr,
 	}
 
-	//registriramo node
+	// registriramo node
 	resp, err := ctrlClient.RegisterNode(ctx, req)
 	if err != nil {
 		log.Fatalf("RegisterNode RPC failed: %v", err)
 	}
 
-	//preverimo response
+	// preverimo response
 	if resp.Success {
 		log.Printf("Node registered successfully: %s\n", resp.Message)
 	} else {
 		log.Printf("Failed to register node: %s\n", resp.Message)
 	}
 
-	//glede na response doloci head in tail
+	// glede na response doloci head in tail
 	isHead := &resp.IsHead
 	isTail := &resp.IsTail
 
-	//zacnemo s hartbeatom
+	// zacnemo s hartbeatom
 	go startHeartbeat(*addrControl, *nodeID)
 
-	//naredimo nov grpc strezik z clienta ce si head, ali za predhodni server ce si vmes
+	// naredimo nov grpc strezik z clienta ce si head, ali za predhodni server ce si vmes
 	s := grpc.NewServer()
 
-	//board je struktura za strezenje metod na razpravljalnici
+	// board je struktura za strezenje metod na razpravljalnici
 	board := server.NewMessageBoardServer(*nodeID, *isHead, *isTail)
 
-	//strezenje metod na board povezemo s streznikom s
+	// strezenje metod na board povezemo s streznikom s
 	razpravljalnica.RegisterMessageBoardServer(s, board)
 
-	//odpri stream in poslušaj za spremembe s strani nadzorne ravnine
-	//TODO spremeni da klices preko ctrlclient ki je ze odprt zgoraj -> done by Jaka
+	// odpri stream in poslušaj za spremembe s strani nadzorne ravnine
 	board.StartSubscribingChanges(*nodeID, ctrlClient)
 
-	// izpišemo ime strežnika
+	// izpisemo ime streznika
 	hostName, err := os.Hostname()
 	if err != nil {
 		panic(err)
 	}
 
-	//odpremo vticnico
+	// odpremo vticnico
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("listen failed: %v", err)
@@ -105,7 +104,7 @@ func main() {
 
 	log.Printf("Starting node %s at %s (head=%v, tail=%v)", *nodeID, *addr, *isHead, *isTail)
 
-	//zacnemo s strezenjem
+	// zacnemo s strezenjem
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("serve failed: %v", err)
 	}
