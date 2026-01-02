@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -563,7 +564,7 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 	for _, topicId := range req.TopicId {
 		// pridobi stara sporocila in vrni error ce topic not found ali ni sporocil v topicu
 		msgs, err := s.storage.GetMessages(topicId, req.FromMessageId, 100)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "no messages for topic") {
 			return err
 		}
 

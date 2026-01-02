@@ -137,7 +137,8 @@ func (s *NodeStorage) GetMessages(topicId int64, fromMessageId int64, limit int)
 
 	commentsByTopic, ok := s.comments[topicId]
 	if !ok || len(commentsByTopic) == 0 {
-		return nil, errors.New("no messages for topic")
+		//vrnemo prazen slice ce ni komentarjev
+		return []*razpravljalnica.Message{}, errors.New("no messages for topic")
 	}
 
 	// zberi ustrezna sporocila
