@@ -1,5 +1,5 @@
 // go run cmd/control/main.go
-// build with: go build -o ./bin/control ./cmd/control
+// build with: go build -o ./bin/control.exe ./cmd/control
 package main
 
 import (
@@ -15,7 +15,7 @@ import (
 
 func main() {
 	// 1. Konfiguracija
-	addr := flag.String("addr", "localhost:50050", "control address")
+	addr := flag.String("addr", "localhost:5000", "control address")
 	flag.Parse()
 
 	// 2. TCP poslusanje

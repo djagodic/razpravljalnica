@@ -1,6 +1,6 @@
 package main
 
-//build with: go build -o ./bin/server ./cmd/server
+//build with: go build -o ./bin/server.exe ./cmd/server
 
 import (
 	"context"

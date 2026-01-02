@@ -16,6 +16,7 @@ import (
 	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -334,6 +335,11 @@ func main() {
 				Limit:         100,
 			})
 			if err != nil {
+				st, ok := status.FromError(err)
+				if ok && st.Message() == "no messages for topic" {
+					fmt.Printf("no messages for topic\n")
+					continue
+				}
 				fmt.Println("Error getting messages:", err)
 				continue
 			}
