@@ -48,7 +48,7 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, controlAddr string) {
 	ctx := context.Background()
 
-	//povezemo se z nadzorno ravnino
+	// povezemo se z nadzorno ravnino
 	cpConn, err := grpc.NewClient(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to control plane: %v", err)
@@ -56,7 +56,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 	defer cpConn.Close()
 	cpClient := nadzorna_ravnina.NewControlPlaneClient(cpConn)
 
-	// 1. Ask the control plane which node to subscribe to
+	// vprasaj nadzorno ravnino na kateri node(server) naj subscriber gre
 	subResp, err := cpClient.GetSubscriptionNode(ctx, &nadzorna_ravnina.SubscriptionNodeRequest{
 		UserId:  userID,
 		TopicId: topicIDs,
@@ -66,7 +66,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 		return
 	}
 
-	// 2. Connect to the chosen message board node
+	// povezi se na izbrani server
 	subConn, err := grpc.NewClient(subResp.Node.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("Failed to connect to subscription node: %v", err)
@@ -74,7 +74,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 	}
 	subClient := razpravljalnica.NewMessageBoardClient(subConn)
 
-	// 3. Subscribe to topics
+	// subscribe teme
 	stream, err := subClient.SubscribeTopic(ctx, &razpravljalnica.SubscribeTopicRequest{
 		UserId:         userID,
 		TopicId:        topicIDs,
@@ -86,7 +86,7 @@ func startSubscribe(userID int64, topicIDs []int64, fromMessagesId int64, contro
 		return
 	}
 
-	// 4. Listen for events in background
+	// poslusaj za spremembe v ozadju
 	go func() {
 		for {
 			ev, err := stream.Recv()
@@ -118,7 +118,7 @@ func loginUser(headClient razpravljalnica.MessageBoardClient) (*razpravljalnica.
 		return nil, errors.New("username cannot be empty")
 	}
 
-	// Try to get existing user
+	// poskusi dobit userja (ce ze obstaja)
 	u, err := headClient.GetUser(
 		context.Background(),
 		&razpravljalnica.GetUserRequest{Name: name},
@@ -129,7 +129,7 @@ func loginUser(headClient razpravljalnica.MessageBoardClient) (*razpravljalnica.
 		return u, nil
 	}
 
-	// User does not exist → create new one
+	// user ne obstaja -> naredi novega
 	u, err = headClient.CreateUser(
 		context.Background(),
 		&razpravljalnica.CreateUserRequest{Name: name},
@@ -348,7 +348,7 @@ func main() {
 				continue
 			}
 
-			// Expect format: <fromMessageId> <topicId1,topicId2,...>
+			// Hoce format: <fromMessageId> <topicId1,topicId2,...>
 			fields := strings.Fields(args)
 			if len(fields) < 2 {
 				fmt.Println("Usage: subscribe <fromMessageId> <topicId1,topicId2,...>")
@@ -362,9 +362,9 @@ func main() {
 				continue
 			}
 
-			// parse topic IDs
-			topicList := strings.Join(fields[1:], " ") // join back the rest in case user typed spaces
-			idStrs := strings.Split(topicList, ",")    // split by comma
+			// parse topic ID-je
+			topicList := strings.Join(fields[1:], " ") // zdruzi, ce slucajno user natipka presledke
+			idStrs := strings.Split(topicList, ",")    // deli glede na vejico
 			var topicIDs []int64
 			for _, s := range idStrs {
 				s = strings.TrimSpace(s)

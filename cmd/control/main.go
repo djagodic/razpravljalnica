@@ -18,19 +18,19 @@ func main() {
 	addr := flag.String("addr", "localhost:50050", "control address")
 	flag.Parse()
 
-	// 2. TCP listener
+	// 2. TCP poslusanje
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %v", *addr, err)
 	}
 
-	// 3. gRPC strežnik
+	// gRPC streznik
 	grpcServer := grpc.NewServer()
 
-	// 4. Inicializacija ControlPlane
+	// inicializacija nadzorne ravnine
 	controlPlane := control.NewControlPlaneServer()
 
-	// 5. Registracija gRPC servisa
+	// registracija gRPC servisa
 	nadzorna_ravnina.RegisterControlPlaneServer(grpcServer, controlPlane)
 
 	// 6. Zagon monitoringa
@@ -38,7 +38,7 @@ func main() {
 
 	log.Printf("Control Plane running on %s", *addr)
 
-	// 7. Serve (blocking)
+	// zacnemo s strezenjem
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("gRPC server failed: %v", err)
 	}

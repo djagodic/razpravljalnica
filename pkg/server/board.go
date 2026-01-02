@@ -36,7 +36,7 @@ type MessageBoardServer struct {
 	IsTail   bool
 	nextNode razpravljalnica.MessageBoardClient
 
-	// subscription channels: topicId -> userId -> chan *api.MessageEvent
+	// subscription kanali: topicId -> userId -> kanal *api.MessageEvent
 	subs map[string]map[string]chan *razpravljalnica.MessageEvent
 }
 
@@ -52,12 +52,12 @@ func NewMessageBoardServer(nodeId string, isHead, isTail bool) *MessageBoardServ
 	}
 }
 
-// helper for testing
+// helper za testiranje
 func (s *MessageBoardServer) SetNextNode(client razpravljalnica.MessageBoardClient) {
 	s.nextNode = client
 }
 
-// nextSequence returns monotonic sequence number
+// nextSequence vrne monotono zaporedno stevilko
 func (s *MessageBoardServer) nextSequence() int64 {
 	return atomic.AddInt64(&s.seq, 1)
 }
@@ -65,7 +65,7 @@ func (s *MessageBoardServer) nextSequence() int64 {
 func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient nadzorna_ravnina.ControlPlaneClient) {
 	ctx := context.Background()
 
-	// Subscribe to changes
+	// subscribe na spremembe
 	stream, err := ctrlClient.SubscribeToChanges(ctx, &nadzorna_ravnina.SubscribeToChangesRequest{NodeId: nodeId})
 	if err != nil {
 		log.Printf("Stream failed: %v", err)
@@ -74,7 +74,7 @@ func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient n
 
 	log.Println("Streaming started in background")
 
-	// Listen for events in background
+	// poslusaj za spremembe v ozadju
 	go func() {
 		for {
 			ev, err := stream.Recv()
@@ -92,22 +92,22 @@ func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient n
 
 // povezi se na naslednji server v verigi
 func (s *MessageBoardServer) ConnectToNextNode(address string) {
-	//ce pride posebno sporocilo gremo in nastavimo novi head node -> namesto posebne funkcije uporabimo kar tole
+	// ce pride posebno sporocilo gremo in nastavimo novi head node -> namesto posebne funkcije uporabimo kar tole
 	if address == "NewHead1234" {
 		//s.mu.Lock()
 		s.IsHead = true
 		//s.mu.Unlock()
-		log.Printf("Nastavili smo nov head node, stanje Head: %t", s.IsHead)
+		log.Printf("We have set up a new head node, the Head state: %t", s.IsHead)
 		return
 	}
 
-	//povezavo na nil naredimo tako da je address prazen string -> postanemo rep
+	// povezavo na nil naredimo tako da je address prazen string -> postanemo rep
 	if address == "" {
 		//s.mu.Lock()
 		s.nextNode = nil
 		s.IsTail = true
 		//s.mu.Unlock()
-		log.Printf("Povezali na nov node: 'nil, stanje Tail: %t", s.IsTail)
+		log.Printf("Connected to new node: 'nil, status Tail: %t", s.IsTail)
 		return
 	}
 
@@ -118,23 +118,23 @@ func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	//s.mu.Lock()
 	client := razpravljalnica.NewMessageBoardClient(conn)
 
-	// freeze replication
+	// zamrznemo replikacijo
 	s.mu.Lock()
 	s.nextNode = nil
 	s.IsTail = false
 	s.mu.Unlock()
 
-	// build snapshot
+	// zgradimo snapshot
 	snap := s.storage.BuildSnapshot()
 
-	//send snapshot
+	// poslji snapshot
 	_, err = client.InstallSnapshot(context.Background(), snap)
 	if err != nil {
 		log.Printf("snapshot failed: %v", err)
 		return
 	}
 
-	// ACK implied by RPC success
+	// potrditev je implicitna ob uspesnem RPC klicu
 	s.mu.Lock()
 	s.nextNode = client
 	s.mu.Unlock()
@@ -153,14 +153,14 @@ func (s *MessageBoardServer) InstallSnapshot(
 
 	log.Printf("[%s] Installing snapshot", s.nodeId)
 
-	// reset current storage
+	// ponastavi trenutno shrambo
 	s.storage.Reset()
 
 	maxUserId := int64(0)
 	maxTopicId := int64(0)
 	maxMessageId := int64(0)
 
-	// restore users
+	// obnovi uporabnike
 	for _, u := range snap.Users {
 		s.storage.AddUser(u)
 		if u.Id > maxUserId {
@@ -168,7 +168,7 @@ func (s *MessageBoardServer) InstallSnapshot(
 		}
 	}
 
-	// restore topics
+	// obnovi teme
 	for _, t := range snap.Topics {
 		s.storage.AddTopic(t)
 		if t.Id > maxTopicId {
@@ -176,7 +176,7 @@ func (s *MessageBoardServer) InstallSnapshot(
 		}
 	}
 
-	// restore messages
+	// obnovi sporocila
 	for _, m := range snap.Messages {
 		s.storage.AddMessage(m)
 		if m.Id > maxMessageId {
@@ -184,7 +184,7 @@ func (s *MessageBoardServer) InstallSnapshot(
 		}
 	}
 
-	// update global next IDs
+	// posodobi globalne naslednje ID-je
 	nextUserId = maxUserId + 1
 	nextTopicId = maxTopicId + 1
 	nextMessageId = maxMessageId + 1
@@ -203,7 +203,7 @@ func (s *NodeStorage) BuildSnapshot() *razpravljalnica.StorageSnapshot {
 	}
 }
 
-// ------------------------ gRPC methods -----------------------------
+// ------------------------ gRPC metode -----------------------------
 func (s *MessageBoardServer) GetUser(ctx context.Context, req *razpravljalnica.GetUserRequest) (*razpravljalnica.User, error) {
 
 	user := s.storage.GetUserByName(req.Name)
@@ -222,11 +222,11 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 	}
 	s.storage.AddUser(user)
 
-	//povecamo next user Id
-	//TODO zamenjaj s cim bolj robustnim
+	// povecamo next user Id
+	// TODO zamenjaj s cim bolj robustnim
 	nextUserId++
 
-	// log and replicate
+	// belezenje in replikacija
 	entry := &LogEntry{
 		Op:       OpCreateUser,
 		User:     user,
@@ -234,7 +234,7 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 	}
 	s.log.Add(entry)
 
-	//repllikacija + zaklep branja
+	// repllikacija + zaklep branja
 	//s.mu.RLock()
 	next := s.nextNode
 	//s.mu.RUnlock()
@@ -258,7 +258,7 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	}
 	s.storage.AddTopic(topic)
 
-	//povecamo next topic id
+	// povecamo next topic id
 	nextTopicId++
 
 	entry := &LogEntry{
@@ -268,7 +268,7 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	//replikacija + zaklep branja
+	// replikacija + zaklep branja
 	//s.mu.RLock()
 	next := s.nextNode
 	//s.mu.RUnlock()
@@ -307,7 +307,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 		Likes:     0,
 	}
 
-	//povecamo next message id
+	// povecamo next message id
 	nextMessageId++
 
 	if err := s.storage.AddMessage(message); err != nil {
@@ -321,7 +321,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	//replikacija + zaklep branja
+	// replikacija + zaklep branja
 	//s.mu.RLock()
 	next := s.nextNode
 	//s.mu.RUnlock()
@@ -334,7 +334,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 		}
 	}
 
-	// broadcast to local subscribers
+	// razposlji lokalnim narocnikom
 	go s.broadcastToSubscribers(message, razpravljalnica.OpType_POST)
 
 	log.Printf("postMessage -> %d (%s) at topic %d (%s) by user %d (%s)", message.Id, message.Text, message.TopicId, message.TopicName, message.UserId, message.UserName)
@@ -344,10 +344,10 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, op razpravljalnica.OpType) {
 	topicIDStr := fmt.Sprint(c.TopicId)
 
-	// get subscribers only for this topic
+	//  razposlji lokalnim narocnikom
 	userSubs, ok := s.subs[topicIDStr]
 	if !ok {
-		// no subscribers for this topic
+		// ni narocnikov za to temo
 		return
 	}
 
@@ -368,11 +368,11 @@ func (s *MessageBoardServer) broadcastToSubscribers(c *razpravljalnica.Message, 
 			EventAt: timestamppb.New(time.Now()),
 		}
 		select {
-		//v primeru da je client offline in je v njegovem kanalu ze 100 sporocil
-		//bi tukaj ce ne bi imeli select stavka cakali
+		// v primeru da je client offline in je v njegovem kanalu ze 100 sporocil
+		// bi tukaj ce ne bi imeli select stavka cakali
 		case ch <- ev:
 		default:
-			// drop if subscriber is slow
+			// spusti, ce je narocnik pocasen
 		}
 	}
 }
@@ -387,7 +387,7 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 		return nil, errors.New("user not authorized to update this message")
 	}
 
-	//added for debuging, da vidim kateri je star message pri izpisu, preden se posodobi
+	// dodano za debuging, da vidim kateri je star message pri izpisu, preden se posodobi
 	temp := comment.Text
 
 	comment.Text = req.Text
@@ -403,7 +403,7 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 	}
 	s.log.Add(entry)
 
-	//replikacija + zaklep branja
+	// replikacija + zaklep branja
 	//s.mu.RLock()
 	next := s.nextNode
 	//s.mu.RUnlock()
@@ -454,7 +454,7 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 	}
 	s.log.Add(entry)
 
-	//replikacija + zaklep branja
+	// replikacija + zaklep branja
 	//s.mu.RLock()
 	next := s.nextNode
 	//s.mu.RUnlock()
@@ -489,7 +489,7 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	//replikacija + zaklep branja
+	// replikacija + zaklep branja
 	//s.mu.RLock()
 	next := s.nextNode
 	//s.mu.RUnlock()
@@ -568,14 +568,14 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 		}
 
 		if _, ok := s.subs[fmt.Sprint(topicId)]; !ok {
-			//ustvari kanal, ce topic se ni shranjen v subs
+			// ustvari kanal, ce topic se ni shranjen v subs
 			s.subs[fmt.Sprint(topicId)] = make(map[string]chan *razpravljalnica.MessageEvent)
 		}
 		ch := make(chan *razpravljalnica.MessageEvent, 100)
-		//shranis kanal subscriberja v subs
+		// shranis kanal subscriberja v subs
 		s.subs[fmt.Sprint(topicId)][fmt.Sprint(req.UserId)] = ch
 
-		//poslji stara sporocila
+		// poslji stara sporocila
 		for _, m := range msgs {
 			ev := &razpravljalnica.MessageEvent{
 				SequenceNumber: s.nextSequence(),
@@ -597,7 +597,7 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 			}
 		}
 
-		// stream new messages
+		// posljijaj nova sporocila
 		go func(ch chan *razpravljalnica.MessageEvent) {
 			for ev := range ch {
 				if err := stream.Send(ev); err != nil {
@@ -606,6 +606,6 @@ func (s *MessageBoardServer) SubscribeTopic(req *razpravljalnica.SubscribeTopicR
 			}
 		}(ch)
 	}
-	// block to keep the stream open
+	// blokiramo, da ostane stream odprt
 	select {}
 }

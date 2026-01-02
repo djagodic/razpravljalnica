@@ -7,7 +7,7 @@ import (
 
 var idCounter int64 = 1
 
-// GenID generates unique IDs for users, topics, comments, etc.
+// GenID generira unikatne ID-je za userje, teme, sprorocila
 func GenID(prefix string) string {
 	id := atomic.AddInt64(&idCounter, 1)
 	return fmt.Sprintf("%s-%d", prefix, id)

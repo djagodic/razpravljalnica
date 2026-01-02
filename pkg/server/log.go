@@ -18,7 +18,7 @@ const (
 	OpLikeMessage
 )
 
-// LogEntry stores operation for replication
+// LogEntry hrani poadtke za replikacijo
 type LogEntry struct {
 	Op       OperationType
 	User     *razpravljalnica.User
@@ -27,7 +27,7 @@ type LogEntry struct {
 	Sequence int64
 }
 
-// ReplicationLog stores all uncommitted events
+// ReplicationLog hrani vse uncommitted evente
 type ReplicationLog struct {
 	mu      sync.Mutex
 	entries []*LogEntry
