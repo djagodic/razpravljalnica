@@ -15,7 +15,6 @@ import (
 )
 
 // ControlPlaneServer implements api.ControlPlane
-// TODO spremeni nodes v Linked List
 type ControlPlaneServer struct {
 	nadzorna_ravnina.UnimplementedControlPlaneServer
 

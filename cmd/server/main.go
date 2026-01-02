@@ -1,5 +1,7 @@
 package main
 
+//build with: go build -o ./bin/server ./cmd/server
+
 import (
 	"context"
 	"flag"
