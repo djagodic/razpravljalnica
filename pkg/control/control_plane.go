@@ -37,7 +37,7 @@ func NewControlPlaneServer() *ControlPlaneServer {
 	return &ControlPlaneServer{
 		nodes:        []*NodeInfo{},
 		nodeMap:      make(map[string]*NodeInfo),
-		interval:     5 * time.Second, // heartbeat interval
+		interval:     1 * time.Second, // heartbeat interval
 		subToChanges: make(map[string]chan *nadzorna_ravnina.Changes),
 	}
 }
@@ -156,6 +156,7 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 }
 
 // heartbeat posodobi cas zadnjega stika
+// TODO is unused !?!?
 func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnina.HeartbeatRequest) (*emptypb.Empty, error) {
 
 	c.mu.Lock()
@@ -186,6 +187,7 @@ func (c *ControlPlaneServer) monitorNodes() {
 			if !n.Alive {
 				continue
 			}
+			//ce vozlisce 2x zapored ne odgovori je mrtvo in ga odstranimo iz verige
 			if now.Sub(n.LastHB) > 2*c.interval {
 				n.Alive = false
 				log.Printf("node %s marked DEAD", n.NodeID)
