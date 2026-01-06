@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica2/pkg/api/nadzornaRavnina"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,8 +22,20 @@ type ControlPlaneServer struct {
     address     string // gRPC
     raftAddress string // Raft transport
 
+	// Hooks used when the control plane is wrapped by RaftControlPlane.
+	leaderCheck      func() bool
+	applyDeregisterFn func(nodeID string) error
+	applySetNodesFn   func(nodes []*NodeInfo) error
+
 
 	mu           sync.RWMutex
+	// subToChanges is accessed from Register/Deregister (which hold mu) AND from
+	// SubscribeToChanges stream goroutines. A Go RWMutex is not re-entrant, so
+	// calling sendChanges() (which used to RLock mu) while holding mu.Lock()
+	// deadlocked the leader on the 2nd server registration.
+	//
+	// We therefore protect subscriptions with a dedicated mutex.
+	subsMu       sync.RWMutex
 	nodes        []*NodeInfo // ordered chain: head -> ... -> tail
 	nodeMap      map[string]*NodeInfo
 	interval     time.Duration
@@ -126,9 +138,14 @@ func (c *ControlPlaneServer) registerNodeInternal(ctx context.Context, req *nadz
 func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 	fmt.Printf("DEBUG: deregistriramo node %s\n", nodeID)
 
-	//zaklenili smo ze v hartbeatu
-	//c.mu.Lock()
-	//defer c.mu.Unlock()
+	// IMPORTANT:
+	// DeregisterNode can be called from multiple goroutines:
+	// - gRPC handlers (non-Raft mode)
+	// - the monitor loop
+	// - the Raft FSM apply goroutine
+	// Therefore it MUST be internally synchronized.
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	_, ok := c.nodeMap[nodeID]
 	//ce server ni v node Map pac ni registriran in vrnes nic
 	if !ok {
@@ -141,16 +158,24 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 	//ga izbrisemo iz nodes
 	for i, n := range c.nodes {
 		if n.NodeID == nodeID {
-			if i != 0 && i != len(c.nodes)-1 { //ce ni bil prvi in je za njim bil se en, moramo sprociti predhodniku o spremembi
+			// If this is the only node in the chain, just remove it.
+			// (No predecessor/successor exists, so nothing to notify.)
+			if len(c.nodes) == 1 {
+				c.nodes = nil
+				break
+			}
+
+			// Otherwise, notify affected neighbors.
+			if i != 0 && i != len(c.nodes)-1 { // middle node
 				fmt.Printf("DEBUG: poslal sendchanges v %s in %s\n", c.nodes[i-1].NodeID, c.nodes[i+1].NodeID)
-				c.sendChanges(c.nodes[i-1], c.nodes[i+1], false)
-			} else if i != 0 && i == len(c.nodes)-1 { //ce ni prvi, ampak je zadnji
+				_ = c.sendChanges(c.nodes[i-1], c.nodes[i+1], false)
+			} else if i != 0 && i == len(c.nodes)-1 { // tail
 				fmt.Printf("DEBUG: poslal sendchanges v %s in 'nil'\n", c.nodes[i-1].NodeID)
-				c.sendChanges(c.nodes[i-1], nil, false)
-			} else if i == 0 { //ce odpove head
-				//TODO obvestimo cliente -> NE, client bo sam sel na controlplane ponovno in vzel nov naslov heada
-				c.sendChanges(c.nodes[i+1], nil, true)
-				fmt.Printf("DEBUG: odppovedal head: todo\n")
+				_ = c.sendChanges(c.nodes[i-1], nil, false)
+			} else if i == 0 { // head
+				// New head is the next node (index 1)
+				_ = c.sendChanges(c.nodes[1], nil, true)
+				fmt.Printf("DEBUG: odpovedal head: new head=%s\n", c.nodes[1].NodeID)
 			}
 			//izbrisemo iz verige
 			c.nodes = append(c.nodes[:i], c.nodes[i+1:]...)
@@ -170,16 +195,30 @@ func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnin
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	n, ok := c.nodeMap[req.NodeId]
+	_, ok := c.nodeMap[req.NodeId]
 	if !ok {
 		log.Printf("heartbeat from unknown node %s", req.NodeId)
 		return &emptypb.Empty{}, nil
 	}
 
-	n.LastHB = time.Now()
-	n.Alive = true
+	c.heartbeatInternalLocked(req.NodeId, time.Now())
 
 	return &emptypb.Empty{}, nil
+}
+
+
+// heartbeatInternalLocked updates liveness for nodeID. Caller must hold c.mu.
+func (c *ControlPlaneServer) heartbeatInternalLocked(nodeID string, hbAt time.Time) {
+	n, ok := c.nodeMap[nodeID]
+	if !ok {
+		// Ignore unknown node heartbeats (node may have been deregistered).
+		return
+	}
+	if hbAt.IsZero() {
+		hbAt = time.Now()
+	}
+	n.LastHB = hbAt
+	n.Alive = true
 }
 
 // Periodic health check to detect dead nodes
@@ -188,29 +227,51 @@ func (c *ControlPlaneServer) monitorNodes() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		c.mu.Lock()
+		// When running under Raft, ONLY the leader should run failure detection / reconfiguration.
+		if c.leaderCheck != nil && !c.leaderCheck() {
+			continue
+		}
 
 		now := time.Now()
+		dead := make([]string, 0)
+
+		c.mu.Lock()
 		for _, n := range c.nodes {
+			// Defensive: after Raft restore / snapshot, LastHB might be zero.
+			if n.LastHB.IsZero() {
+				n.LastHB = now
+			}
 			if !n.Alive {
 				continue
 			}
-			if now.Sub(n.LastHB) > 2*c.interval {
+			if now.Sub(n.LastHB) > 3*c.interval {
 				n.Alive = false
+				dead = append(dead, n.NodeID)
 				log.Printf("node %s marked DEAD", n.NodeID)
-				c.reconfigureChain(n.NodeID)
+			} else {
+				log.Printf("node %s heartbeat successful", n.NodeID)
 			}
-
-			log.Printf("node %s heartbeat successful", n.NodeID)
 		}
-
 		c.mu.Unlock()
+
+		// Reconfigure outside the lock to avoid deadlocks and long pauses.
+		for _, id := range dead {
+			c.reconfigureChain(id)
+		}
 	}
 }
 
-// Reconfigure chain after node failure
+// reconfigureChain is called after node failure.
 func (c *ControlPlaneServer) reconfigureChain(deadNodeID string) {
 	log.Printf("reconfiguring chain, removing dead node %s", deadNodeID)
+	// When running under Raft, make sure the removal is replicated via the leader.
+	if c.applyDeregisterFn != nil {
+		if err := c.applyDeregisterFn(deadNodeID); err != nil {
+			log.Printf("failed to replicate deregister for %s: %v", deadNodeID, err)
+			return
+		}
+		return
+	}
 	c.DeregisterNode(deadNodeID)
 	// Note: in full implementation, would also inform head/tail nodes to update nextNode
 }
@@ -300,10 +361,11 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 		change = &nadzorna_ravnina.Changes{NextAdress: naslednji.Address}
 	}
 
-	//pridobimo kanal predzadnjega, dodana bralna ključavnica
-	//s.mu.RLock()
-    ch := s.subToChanges[trenuten.NodeID]
-    //s.mu.RUnlock()
+	// Subscription map is protected by subsMu (NOT by mu) to avoid deadlocks
+	// when sendChanges is invoked while holding mu.Lock().
+	s.subsMu.RLock()
+	ch := s.subToChanges[trenuten.NodeID]
+	s.subsMu.RUnlock()
 
 	//chatko shit, pomoje nepotrebno
     if ch == nil {
@@ -323,18 +385,18 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
 	
-	//dodal sem zaklepanje med nastavljanjem channela za nextNode
-	//s.mu.Lock()
-    s.subToChanges[req.NodeId] = ch
-    //s.mu.Unlock()
+	// Store subscriber channel under subsMu (NOT mu).
+	s.subsMu.Lock()
+	s.subToChanges[req.NodeId] = ch
+	s.subsMu.Unlock()
 
-	//ko bo vse skupaj crashnilo zbrišem kanal
-    // defer func() {
-    //     s.mu.Lock()
-    //     delete(s.subToChanges, req.NodeId)
-    //     close(ch)
-    //     s.mu.Unlock()
-    // }()
+	// ko bo vse skupaj crashnilo zbrišem kanal
+    defer func() {
+		s.subsMu.Lock()
+		delete(s.subToChanges, req.NodeId)
+		close(ch)
+		s.subsMu.Unlock()
+    }()
 
 
 	//stream new messages
@@ -348,4 +410,24 @@ func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeT
 
 	// block to keep the stream open
 	select {}
+}
+
+
+// setNodesInternal replaces the full control-plane node list.
+// It must be called with the mutex held by the caller OR will lock internally.
+func (c *ControlPlaneServer) setNodesInternal(nodes []*NodeInfo) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nodes = nodes
+	c.nodeMap = make(map[string]*NodeInfo)
+	now := time.Now()
+	for _, n := range nodes {
+		// On restore, be conservative: treat nodes as alive until proven otherwise
+		// by missing heartbeats.
+		n.Alive = true
+		if n.LastHB.IsZero() {
+			n.LastHB = now
+		}
+		c.nodeMap[n.NodeID] = n
+	}
 }

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 )
 
 // NodeStorage hrani vse podatke v pomnilniku za posamezno vozlisce

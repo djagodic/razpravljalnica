@@ -10,7 +10,7 @@ syntax = "proto3";
 
 package razpravljalnica;
 
-option go_package = "/razpravljalnica/pkg/api/razpravljalnica";
+option go_package = "/razpravljalnica2/pkg/api/razpravljalnica";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";

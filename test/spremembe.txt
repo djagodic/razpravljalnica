@@ -1,0 +1,28 @@
+Sprememba kontrolne ravnine v Raft ne bi smela pokvariti tvojih unit in fuzz testov, ker ti testi tipično testirajo MessageBoard logiko lokalno 
+(brez realne kontrolne ravnine / brez leader preusmerjanja).
+Kar pa se mora spremeniti, so integration testi, če so prej predpostavljali “en sam control-plane endpoint”. Zdaj je kontrolna ravnina cluster in:
+- leader je lahko na kateremkoli od treh naslovov,
+- followerji vračajo NOT_LEADER,
+- zato morajo testi:
+    * zagnati 3 control-plane procese (cp1/cp2/cp3 + raft porti),
+    * počakati, da se izvoli leader,
+    * šele nato zaganjati podatkovne serverje in delati operacije.
+
+Kaj sem spremenil v testih
+- Popravil sem test/integration_tests/integration_test.go, da:
+    * zažene 3 control-plane instance z -bootstrap=true samo na cp1,
+    * uporabi enoten -peers "cp1=...,cp2=...,cp3=..." (raft naslovi),
+    * počaka na odprte porte,
+    * poišče leaderja tako, da na vsakem cp naslovu kliče GetClusterState in ignorira NOT_LEADER,
+    * zažene 2 podatkovna serverja in naredi “write on head → read on tail (eventually)”.
+
+(Bonus) test je zdaj portabilen: na Windows naredi .exe, drugje brez končnice.
+
+
+Zakaj to deluje
+- Unit/Fuzz testi ne rabijo leaderja, ker ne kličejo control-plane.
+- Integration test zdaj dela “realistično”:
+    * Raft cluster se postavi,
+    * leader je izbran,
+    * serverji se registrirajo na leaderja (ker imajo -peers seznam),
+    * replikacija se preveri.

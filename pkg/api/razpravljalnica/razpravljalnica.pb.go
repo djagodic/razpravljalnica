@@ -1224,7 +1224,7 @@ const file_razpravljalnica_proto_rawDesc = "" +
 	"ListTopics\x12\x16.google.protobuf.Empty\x1a#.razpravljalnica.ListTopicsResponse\x12X\n" +
 	"\vGetMessages\x12#.razpravljalnica.GetMessagesRequest\x1a$.razpravljalnica.GetMessagesResponse\x12Y\n" +
 	"\x0eSubscribeTopic\x12&.razpravljalnica.SubscribeTopicRequest\x1a\x1d.razpravljalnica.MessageEvent0\x01\x12K\n" +
-	"\x0fInstallSnapshot\x12 .razpravljalnica.StorageSnapshot\x1a\x16.google.protobuf.EmptyB*Z(/razpravljalnica/pkg/api/razpravljalnicab\x06proto3"
+	"\x0fInstallSnapshot\x12 .razpravljalnica.StorageSnapshot\x1a\x16.google.protobuf.EmptyB+Z)/razpravljalnica2/pkg/api/razpravljalnicab\x06proto3"
 
 var (
 	file_razpravljalnica_proto_rawDescOnce sync.Once

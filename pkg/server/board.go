@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
-	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica2/pkg/api/nadzornaRavnina"
+	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -63,33 +63,72 @@ func (s *MessageBoardServer) nextSequence() int64 {
 	return atomic.AddInt64(&s.seq, 1)
 }
 
-func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, ctrlClient nadzorna_ravnina.ControlPlaneClient) {
-	ctx := context.Background()
-
-	// subscribe na spremembe
-	stream, err := ctrlClient.SubscribeToChanges(ctx, &nadzorna_ravnina.SubscribeToChangesRequest{NodeId: nodeId})
-	if err != nil {
-		log.Printf("Stream failed: %v", err)
-		return
-	}
-
-	log.Println("Streaming started in background")
-
-	// poslusaj za spremembe v ozadju
+func (s *MessageBoardServer) StartSubscribingChanges(nodeId string, controlPlaneAddrs []string) {
+	// Runs forever in background: subscribe to chain changes from the current CP leader.
 	go func() {
 		for {
-			ev, err := stream.Recv()
+			conn, client, used, err := dialLeaderControlPlane(controlPlaneAddrs)
 			if err != nil {
-				log.Printf("Control plane ended stream: %v", err)
-				return
+				log.Printf("SubscribeToChanges: no reachable control-plane leader: %v", err)
+				time.Sleep(1 * time.Second)
+				continue
 			}
 
-			log.Printf("Next node address received: %s", ev.NextAdress)
+			ctx := context.Background()
+			stream, err := client.SubscribeToChanges(ctx, &nadzorna_ravnina.SubscribeToChangesRequest{NodeId: nodeId})
+			if err != nil {
+				log.Printf("SubscribeToChanges: failed at %s: %v", used, err)
+				_ = conn.Close()
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
 
-			s.ConnectToNextNode(ev.NextAdress)
+			log.Printf("SubscribeToChanges: stream established via leader %s", used)
+
+			for {
+				ev, err := stream.Recv()
+				if err != nil {
+					log.Printf("SubscribeToChanges: stream ended (%s): %v", used, err)
+					break
+				}
+				log.Printf("Next node address received: %s", ev.NextAdress)
+				s.ConnectToNextNode(ev.NextAdress)
+			}
+
+			_ = conn.Close()
+			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 }
+
+// dialLeaderControlPlane tries addresses and returns the first one that answers a leader-only RPC.
+func dialLeaderControlPlane(addrs []string) (*grpc.ClientConn, nadzorna_ravnina.ControlPlaneClient, string, error) {
+	var lastErr error
+	for _, addr := range addrs {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		cancel()
+		if err != nil {
+			lastErr = fmt.Errorf("dial %s: %w", addr, err)
+			continue
+		}
+		client := nadzorna_ravnina.NewControlPlaneClient(conn)
+
+		// Probe leadership.
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
+		_, err = client.GetClusterState(ctx2, &emptypb.Empty{})
+		cancel2()
+		if err != nil {
+			_ = conn.Close()
+			lastErr = fmt.Errorf("probe leader %s: %w", addr, err)
+			continue
+		}
+
+		return conn, client, addr, nil
+	}
+	return nil, nil, "", lastErr
+}
+
 
 // povezi se na naslednji server v verigi
 func (s *MessageBoardServer) ConnectToNextNode(address string) {

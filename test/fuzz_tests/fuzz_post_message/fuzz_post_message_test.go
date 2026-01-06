@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
-	"github.com/djagodic/razpravljalnica/pkg/server"
-	helper "github.com/djagodic/razpravljalnica/test"
+	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
+	"github.com/djagodic/razpravljalnica2/pkg/server"
+	helper "github.com/djagodic/razpravljalnica2/test"
 )
 
 // run with (from root): go test -fuzz=FuzzPostMessage github.com/djagodic/razpravljalnica/test/fuzz_tests/fuzz_post_message

@@ -3,7 +3,7 @@ package server
 import (
 	"sync"
 
-	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 )
 
 // OperationType defines replication operation

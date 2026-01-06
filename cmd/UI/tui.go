@@ -6,22 +6,33 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
-	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
-	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica2/pkg/api/nadzornaRavnina"
+	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 /* ===================== GLOBALNE ===================== */
 var (
-	controlAddr     string
+	// -addrControl lahko vsebuje enega ali več CP naslovov, npr:
+	// 127.0.0.1:5000,127.0.0.1:5001,127.0.0.1:5002
+	controlAddr  string
+	controlPeers []string
+
+	leaderMu     sync.RWMutex
+	cachedLeader string
+
 	currentUser     *razpravljalnica.User
 	app             *tview.Application
 	currentTopicID  int64
@@ -42,25 +53,211 @@ var lastReceivedMessageID = make(map[int64]int64)
 // topicID -> zadnji message ID, ki ga je user videl
 var lastSeenMessageID = make(map[int64]int64)
 
-/* ===================== gRPC HELPERS ===================== */
-func getClusterState(addr string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, nil, err
+/* ===================== CONTROL PLANE CONNECT (LEADER-AWARE) ===================== */
+
+func splitComma(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
 	}
-	defer conn.Close()
+	return out
+}
 
-	client := nadzorna_ravnina.NewControlPlaneClient(conn)
+func isNotLeaderErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	st, ok := grpcstatus.FromError(err)
+	if !ok {
+		return false
+	}
+	// v tvojem sistemu NOT_LEADER tipično pride kot FailedPrecondition
+	if st.Code() == codes.FailedPrecondition && strings.Contains(strings.ToUpper(st.Message()), "NOT_LEADER") {
+		return true
+	}
+	return false
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func isRetryableCpErr(err error) bool {
+	// NOT_LEADER => takoj probaj drugega
+	if isNotLeaderErr(err) {
+		return true
+	}
+	if err == nil {
+		return false
+	}
+	st, ok := grpcstatus.FromError(err)
+	if !ok {
+		// network err ipd.
+		return true
+	}
+	// Unavailable/DeadlineExceeded se pogosto pojavljata pri failoverju
+	return st.Code() == codes.Unavailable || st.Code() == codes.DeadlineExceeded
+}
+
+func setCachedLeader(addr string) {
+	leaderMu.Lock()
+	defer leaderMu.Unlock()
+	cachedLeader = addr
+}
+
+func getCachedLeader() string {
+	leaderMu.RLock()
+	defer leaderMu.RUnlock()
+	return cachedLeader
+}
+
+// Dial CP node (ne nujno leader) z timeoutom, vrne conn + client
+func dialCp(addr string, timeout time.Duration) (*grpc.ClientConn, nadzorna_ravnina.ControlPlaneClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	resp, err := client.GetClusterState(ctx, &emptypb.Empty{})
+	conn, err := grpc.DialContext(ctx, addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
+	return conn, nadzorna_ravnina.NewControlPlaneClient(conn), nil
+}
 
-	return resp.Head, resp.Tail, nil
+// Najdi leaderja tako, da na vsak CP poskusi GetClusterState.
+// Leader je tisti, ki ne vrne NOT_LEADER in uspešno odgovori.
+func findLeader(timeout time.Duration) (string, error) {
+	// 1) najprej poskusi cached leader
+	if cl := getCachedLeader(); cl != "" {
+		conn, client, err := dialCp(cl, timeout)
+		if err == nil {
+			defer conn.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+			_, err = client.GetClusterState(ctx, &emptypb.Empty{})
+			if err == nil {
+				return cl, nil
+			}
+		}
+		// cached leader ni več ok -> počisti
+		setCachedLeader("")
+	}
+
+	// 2) poskusi vse peer-e
+	var lastErr error
+	for _, addr := range controlPeers {
+		conn, client, err := dialCp(addr, timeout)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		_, callErr := client.GetClusterState(ctx, &emptypb.Empty{})
+		cancel()
+		conn.Close()
+
+		if callErr == nil {
+			setCachedLeader(addr)
+			return addr, nil
+		}
+
+		// če ni leader, to je celo dober znak da je reachable
+		// ampak ni pravi naslov za pisanje.
+		lastErr = callErr
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no control-plane peers configured")
+	}
+	return "", fmt.Errorf("no reachable leader: %w", lastErr)
+}
+
+// Generic helper: izvedi CP klic na leaderju; ob napaki (NOT_LEADER/Unavailable/DeadlineExceeded)
+// poskusi še enkrat z novo leader detekcijo.
+func withLeaderClient[T any](timeout time.Duration, fn func(ctx context.Context, client nadzorna_ravnina.ControlPlaneClient) (T, error)) (T, error) {
+	var zero T
+
+	leader, err := findLeader(timeout)
+	if err != nil {
+		return zero, err
+	}
+
+	callOnce := func(leaderAddr string) (T, error) {
+		conn, client, derr := dialCp(leaderAddr, timeout)
+		if derr != nil {
+			return zero, derr
+		}
+		defer conn.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return fn(ctx, client)
+	}
+
+	res, err := callOnce(leader)
+	if err == nil {
+		return res, nil
+	}
+
+	if !isRetryableCpErr(err) {
+		return zero, err
+	}
+
+	// failover retry: ponovno najdi leaderja in poskusi še enkrat
+	setCachedLeader("")
+	leader2, err2 := findLeader(timeout)
+	if err2 != nil {
+		return zero, err // original error je bolj relevanten
+	}
+
+	return callOnce(leader2)
+}
+
+/* ===================== gRPC HELPERS ===================== */
+
+func getClusterState() (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
+	type pair struct {
+		head *nadzorna_ravnina.NodeInfo
+		tail *nadzorna_ravnina.NodeInfo
+	}
+
+	out, err := withLeaderClient[pair](4*time.Second, func(ctx context.Context, client nadzorna_ravnina.ControlPlaneClient) (pair, error) {
+		resp, err := client.GetClusterState(ctx, &emptypb.Empty{})
+		if err != nil {
+			return pair{}, err
+		}
+		return pair{head: resp.Head, tail: resp.Tail}, nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return out.head, out.tail, nil
+}
+
+func getSubscriptionNode(ctx context.Context, req *nadzorna_ravnina.SubscriptionNodeRequest) (*nadzorna_ravnina.SubscriptionNodeResponse, error) {
+	// ctx v UI-ju je cancelable (unsubscribe). Mi pa CP klic zavijemo v kratek timeout,
+	// da ne blokira UI-ja, če leader pade.
+	type wrapper struct {
+		resp *nadzorna_ravnina.SubscriptionNodeResponse
+	}
+	out, err := withLeaderClient[wrapper](4*time.Second, func(_ context.Context, client nadzorna_ravnina.ControlPlaneClient) (wrapper, error) {
+		// uporabi originalni ctx, ampak naj bo bounded
+		cctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+		defer cancel()
+
+		resp, err := client.GetSubscriptionNode(cctx, req)
+		if err != nil {
+			return wrapper{}, err
+		}
+		return wrapper{resp: resp}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.resp, nil
 }
 
 func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.ClientConn) {
@@ -73,6 +270,7 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 }
 
 /* ===================== UI SCREENS ===================== */
+
 func loginScreen(onSuccess func()) tview.Primitive {
 	form := tview.NewForm()
 	var username string
@@ -86,10 +284,10 @@ func loginScreen(onSuccess func()) tview.Primitive {
 			return
 		}
 
-		head, _, err := getClusterState(controlAddr)
+		head, _, err := getClusterState()
 		if err != nil {
 			app.Stop()
-			fmt.Printf("Failed to connect to control plane at %s to get cluster state\n", controlAddr)
+			fmt.Printf("Failed to connect to control plane to get cluster state\n")
 			log.Fatal(err)
 			return
 		}
@@ -122,6 +320,7 @@ func loginScreen(onSuccess func()) tview.Primitive {
 }
 
 /* ===================== MAIN UI ===================== */
+
 func mainUI() tview.Primitive {
 	topics := tview.NewList()
 	topics.SetBorder(true)
@@ -164,7 +363,7 @@ func mainUI() tview.Primitive {
 			return
 		}
 
-		head, _, err := getClusterState(controlAddr)
+		head, _, err := getClusterState()
 		if err != nil {
 			return
 		}
@@ -217,7 +416,7 @@ func mainUI() tview.Primitive {
 				updateMessagePrompt(messages, input)
 				loadTopics(topics, messages, input)
 			case tcell.KeyCtrlD:
-    			deleteMessagePrompt(messages, input)
+				deleteMessagePrompt(messages, input)
 				loadTopics(topics, messages, input)
 			case tcell.KeyCtrlS: // Ctrl+S -> subscribe na trenutno izbrano temo
 				index := topics.GetCurrentItem()
@@ -235,10 +434,9 @@ func mainUI() tview.Primitive {
 				if cancel, ok := activeSubscriptions[topicID]; ok {
 					cancel()
 					delete(activeSubscriptions, topicID)
-					//log.Printf("Unsubscribed from topic %d\n", topicID)
 					loadTopics(topics, messages, input)
 				} else {
-					subscribeToTopic(topicID, topics, messages, input) // od trenutnega message Id naprej delam subscribe
+					subscribeToTopic(topicID, topics, messages, input)
 					loadTopics(topics, messages, input)
 				}
 			}
@@ -247,16 +445,16 @@ func mainUI() tview.Primitive {
 	})
 
 	pages = tview.NewPages().
-    AddPage("main", flex, true, true)
+		AddPage("main", flex, true, true)
 
 	return pages
-
 }
 
 /* ===================== TOPIC LOADING ===================== */
+
 func loadTopics(topics, messages *tview.List, input *tview.InputField) {
 	selected := topics.GetCurrentItem()
-	_, tail, err := getClusterState(controlAddr)
+	_, tail, err := getClusterState()
 	if err != nil {
 		return
 	}
@@ -303,15 +501,15 @@ func loadTopics(topics, messages *tview.List, input *tview.InputField) {
 	if selected >= 0 && selected < topics.GetItemCount() {
 		topics.SetCurrentItem(selected)
 	}
-
 }
 
 /* ===================== LOAD MESSAGES ===================== */
+
 func loadMessages(list *tview.List, topicID int64) {
 	list.Clear()
 	currentMessages = nil
 
-	_, tail, err := getClusterState(controlAddr)
+	_, tail, err := getClusterState()
 	if err != nil {
 		return
 	}
@@ -352,17 +550,16 @@ func loadMessages(list *tview.List, topicID int64) {
 	if len(resp.Messages) > 0 {
 		lastSeenMessageID[topicID] = resp.Messages[len(resp.Messages)-1].Id
 	}
-
-	//TODO: poskusi narediti refresh tem tukaj, da se * pobrise ko subscriber pogleda spororocila
 }
 
 /* ===================== LIKE MESSAGE ===================== */
+
 func likeMessage(messageID int64) {
 	if currentTopicID == 0 || currentUser == nil {
 		return
 	}
 
-	head, _, err := getClusterState(controlAddr)
+	head, _, err := getClusterState()
 	if err != nil {
 		return
 	}
@@ -370,11 +567,10 @@ func likeMessage(messageID int64) {
 	client, conn := connectToNode(head.Address)
 	defer conn.Close()
 
-	//msg, err := client.LikeMessage(context.Background(),
 	_, err = client.LikeMessage(context.Background(),
 		&razpravljalnica.LikeMessageRequest{
 			UserId:    currentUser.Id,
-			TopicId:   currentTopicID, // <- include TopicId
+			TopicId:   currentTopicID,
 			MessageId: messageID,
 		})
 	if err != nil {
@@ -382,12 +578,10 @@ func likeMessage(messageID int64) {
 		log.Fatalf("Error liking message: %s", err)
 		return
 	}
-
-	// printaj liked sporocila v konsolo za debug
-	//fmt.Printf("Message liked: %d (%s) | Likes: %d\n", msg.Id, msg.Text, msg.Likes)
 }
 
 /* ===================== CREATE TOPIC ===================== */
+
 func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
 	if currentUser == nil {
 		return
@@ -405,7 +599,7 @@ func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
 			return
 		}
 
-		head, _, err := getClusterState(controlAddr)
+		head, _, err := getClusterState()
 		if err != nil {
 			return
 		}
@@ -440,6 +634,7 @@ func createTopicPrompt(topics, messages *tview.List, input *tview.InputField) {
 }
 
 /* ===================== UPDATE MESSAGE ===================== */
+
 func updateMessagePrompt(messages *tview.List, input *tview.InputField) {
 	index := messages.GetCurrentItem()
 	if index < 0 || index >= len(currentMessages) {
@@ -460,7 +655,7 @@ func updateMessagePrompt(messages *tview.List, input *tview.InputField) {
 	})
 
 	form.AddButton("Update", func() {
-		head, _, err := getClusterState(controlAddr)
+		head, _, err := getClusterState()
 		if err != nil {
 			return
 		}
@@ -494,8 +689,8 @@ func updateMessagePrompt(messages *tview.List, input *tview.InputField) {
 	app.SetFocus(form)
 }
 
-
 /* ===================== DELETE MESSAGE ===================== */
+
 func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 	index := messages.GetCurrentItem()
 	if index < 0 || index >= len(currentMessages) {
@@ -513,7 +708,7 @@ func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 		AddButtons([]string{"Delete", "Cancel"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			if buttonLabel == "Delete" {
-				head, _, err := getClusterState(controlAddr)
+				head, _, err := getClusterState()
 				if err != nil {
 					return
 				}
@@ -542,6 +737,7 @@ func deleteMessagePrompt(messages *tview.List, input *tview.InputField) {
 }
 
 /* ===================== SUBSCRIPTION ===================== */
+
 func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tview.InputField) {
 	if currentUser == nil {
 		return
@@ -559,19 +755,11 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 	ctx, cancel := context.WithCancel(context.Background())
 	activeSubscriptions[topicID] = cancel
 
-	cpConn, err := grpc.Dial(controlAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		app.Stop()
-		log.Fatal(err)
-		return
-	}
-
-	cpClient := nadzorna_ravnina.NewControlPlaneClient(cpConn)
-	subResp, err := cpClient.GetSubscriptionNode(ctx,
-		&nadzorna_ravnina.SubscriptionNodeRequest{
-			UserId:  currentUser.Id,
-			TopicId: []int64{topicID},
-		})
+	// LEADER-AWARE: GetSubscriptionNode mora na leaderja
+	subResp, err := getSubscriptionNode(ctx, &nadzorna_ravnina.SubscriptionNodeRequest{
+		UserId:  currentUser.Id,
+		TopicId: []int64{topicID},
+	})
 	if err != nil {
 		app.Stop()
 		log.Fatal(err)
@@ -601,7 +789,6 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 
 	go func() {
 		defer subConn.Close()
-		defer cpConn.Close()
 
 		for {
 			ev, err := stream.Recv()
@@ -614,7 +801,7 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 
 			app.QueueUpdateDraw(func() {
 				if topicID == currentTopicID {
-					// ce gledam (trenutna tema je tudi tista na katero subscribam -> posodobi UI
+					// ce gledam -> posodobi UI
 					currentMessages = append(currentMessages, ev.Message)
 
 					label := fmt.Sprintf("[yellow]%s[-]: %s [gray](❤️ %d)[-]",
@@ -628,9 +815,7 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 					}
 
 					messagesList.AddItem(label, "", 0, nil)
-
 					messagesList.SetCurrentItem(len(currentMessages) - 1)
-
 					lastSeenMessageID[topicID] = ev.Message.Id
 
 				} else {
@@ -643,11 +828,16 @@ func subscribeToTopic(topicID int64, topics, messagesList *tview.List, input *tv
 	}()
 }
 
-
 /* ===================== MAIN ===================== */
+
 func main() {
-	flag.StringVar(&controlAddr, "addrControl", "localhost:5000", "control plane address")
+	flag.StringVar(&controlAddr, "addrControl", "127.0.0.1:5000,127.0.0.1:5001,127.0.0.1:5002", "control plane address(es), comma-separated")
 	flag.Parse()
+
+	controlPeers = splitComma(controlAddr)
+	if len(controlPeers) == 0 {
+		log.Fatal("no control plane addresses provided")
+	}
 
 	app = tview.NewApplication()
 

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	nadzorna_ravnina "github.com/djagodic/razpravljalnica/pkg/api/nadzornaRavnina"
-	razpravljalnica "github.com/djagodic/razpravljalnica/pkg/api/razpravljalnica"
+	nadzorna_ravnina "github.com/djagodic/razpravljalnica2/pkg/api/nadzornaRavnina"
+	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -407,7 +407,7 @@ func main() {
 				continue
 			}
 
-			startSubscribeWithRetry(currentUser.Id, topicIDs, fromMessageId, controlPeers)
+			go startSubscribeWithRetry(currentUser.Id, topicIDs, fromMessageId, controlPeers)
 
 		default:
 			fmt.Println("Unknown command")
