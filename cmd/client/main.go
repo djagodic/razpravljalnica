@@ -119,8 +119,8 @@ func startSubscribeWithRetry(userID int64, topicIDs []int64, fromMessageID int64
                 conn.Close()
                 break // exit inner loop to retry
             }
-            fmt.Printf("[EVENT] %v | Topic %d (%s) | User %d: %s\n",
-                ev.Op, ev.Message.TopicId, ev.Message.TopicName, ev.Message.UserId, ev.Message.Text)
+            fmt.Printf("[EVENT] %v | Topic %d (%s) | User %d (%s): %s\n",
+                ev.Op, ev.Message.TopicId, ev.Message.TopicName, ev.Message.UserId, ev.Message.UserName, ev.Message.Text)
         }
     }
 }

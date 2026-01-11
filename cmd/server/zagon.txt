@@ -1,4 +1,6 @@
 
-go run ./cmd/server/main.go             (-addr ":50051" -id "node-1"  se doda samodejno, ker so to privzete vrednosti)
+go run ./cmd/server/main.go
+(-addr ":50051" -id "node-1"  se doda samodejno, ker so to privzete vrednosti)
+
 go run ./cmd/server/main.go -addr ":50052" -id "node-2"  
 go run ./cmd/server/main.go -addr ":50053" -id "node-3"  

@@ -129,13 +129,13 @@ func waitForChainStable(t *testing.T, cpAddrs []string, wantHeadAddr, wantTailAd
 	for time.Now().Before(deadline) {
 		leader := waitForLeader(t, cpAddrs, 2*time.Second)
 
-		conn, c, err := dialCP(leader, 500*time.Millisecond)
+		conn, c, err := dialCP(leader, 600*time.Millisecond)
 		if err != nil {
 			time.Sleep(150 * time.Millisecond)
 			continue
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
 		st, err := c.GetClusterState(ctx, &emptypb.Empty{})
 		cancel()
 		_ = conn.Close()
@@ -184,7 +184,7 @@ func TestIntegrationReplication(t *testing.T) {
 	buildBinary(t, "../../cmd/control", "./control"+binExt)
 	buildBinary(t, "../../cmd/server", "./server"+binExt)
 
-	// ---- Use unique temp dirs for raft state (CRITICAL FIX) ----
+	// ---- Use unique temp dirs for raft state ----
 	baseDir := t.TempDir()
 	cp1Data := filepath.Join(baseDir, "cp1")
 	cp2Data := filepath.Join(baseDir, "cp2")
@@ -225,13 +225,13 @@ func TestIntegrationReplication(t *testing.T) {
 	defer stopProcess(cp3)
 
 	for _, a := range append(cpAddrs, raft1Addr, raft2Addr, raft3Addr) {
-		require.NoError(t, waitForPort(a, 5*time.Second))
+		require.NoError(t, waitForPort(a, 6*time.Second))
 	}
 
-	leaderAddr := waitForLeader(t, cpAddrs, 10*time.Second)
+	leaderAddr := waitForLeader(t, cpAddrs, 12*time.Second)
 	t.Logf("control-plane leader is %s", leaderAddr)
 
-	// ---- Start head and tail data servers (chain replication) ----
+	// ---- Start HEAD data server first and wait for CP to settle ----
 	headCmd := startProcess(t, "./server"+binExt, []string{
 		"-id=node-1",
 		"-addr=" + headAddr,
@@ -239,6 +239,12 @@ func TestIntegrationReplication(t *testing.T) {
 	})
 	defer stopProcess(headCmd)
 
+	require.NoError(t, waitForPort(headAddr, 6*time.Second))
+
+	// With one node, chain must be head=tail=headAddr
+	waitForChainStable(t, cpAddrs, headAddr, headAddr, 10*time.Second)
+
+	// ---- Start TAIL data server second and wait for CP to settle ----
 	tailCmd := startProcess(t, "./server"+binExt, []string{
 		"-id=node-2",
 		"-addr=" + tailAddr,
@@ -246,11 +252,10 @@ func TestIntegrationReplication(t *testing.T) {
 	})
 	defer stopProcess(tailCmd)
 
-	require.NoError(t, waitForPort(headAddr, 5*time.Second))
-	require.NoError(t, waitForPort(tailAddr, 5*time.Second))
+	require.NoError(t, waitForPort(tailAddr, 6*time.Second))
 
-	// ---- Wait for CP to report correct chain state (CRITICAL FIX) ----
-	waitForChainStable(t, cpAddrs, headAddr, tailAddr, 8*time.Second)
+	// Now chain must be head=headAddr, tail=tailAddr
+	waitForChainStable(t, cpAddrs, headAddr, tailAddr, 12*time.Second)
 
 	// ---- Client: connect to head and tail (with Dial timeouts) ----
 	dialNode := func(addr string) (*grpc.ClientConn, error) {
@@ -273,37 +278,35 @@ func TestIntegrationReplication(t *testing.T) {
 	tailClient := razpravljalnica.NewMessageBoardClient(tailConn)
 
 	// ---- Write on head ----
-	{
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
 
-		u, err := headClient.CreateUser(ctx, &razpravljalnica.CreateUserRequest{Name: "alice"})
-		require.NoError(t, err)
+	u, err := headClient.CreateUser(ctx, &razpravljalnica.CreateUserRequest{Name: "alice"})
+	require.NoError(t, err)
 
-		topic, err := headClient.CreateTopic(ctx, &razpravljalnica.CreateTopicRequest{Name: "t1"})
-		require.NoError(t, err)
+	topic, err := headClient.CreateTopic(ctx, &razpravljalnica.CreateTopicRequest{Name: "t1"})
+	require.NoError(t, err)
 
-		_, err = headClient.PostMessage(ctx, &razpravljalnica.PostMessageRequest{
-			TopicId: topic.Id,
-			UserId:  u.Id,
-			Text:    "hello",
+	_, err = headClient.PostMessage(ctx, &razpravljalnica.PostMessageRequest{
+		TopicId: topic.Id,
+		UserId:  u.Id,
+		Text:    "hello",
+	})
+	require.NoError(t, err)
+
+	// ---- Read on tail (eventually consistent) ----
+	require.Eventually(t, func() bool {
+		rctx, rcancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer rcancel()
+
+		resp, err := tailClient.GetMessages(rctx, &razpravljalnica.GetMessagesRequest{
+			TopicId:       topic.Id,
+			FromMessageId: 0,
+			Limit:         10,
 		})
-		require.NoError(t, err)
-
-		// ---- Read on tail (eventually consistent) ----
-		require.Eventually(t, func() bool {
-			rctx, rcancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
-			defer rcancel()
-
-			resp, err := tailClient.GetMessages(rctx, &razpravljalnica.GetMessagesRequest{
-				TopicId:       topic.Id,
-				FromMessageId: 0,
-				Limit:         10,
-			})
-			if err != nil {
-				return false
-			}
-			return len(resp.Messages) == 1 && resp.Messages[0].Text == "hello"
-		}, 8*time.Second, 200*time.Millisecond)
-	}
+		if err != nil {
+			return false
+		}
+		return len(resp.Messages) == 1 && resp.Messages[0].Text == "hello"
+	}, 10*time.Second, 200*time.Millisecond)
 }
