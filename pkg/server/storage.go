@@ -31,7 +31,7 @@ func (s *NodeStorage) GetUserByName(name string) *razpravljalnica.User {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	//TODO mogoce malo pocasna implementacija ker moras cez vse?
+	//mogoce malo pocasna implementacija ker moras cez vse?
 	for _, u := range s.users {
 		if u.Name == name {
 			return &razpravljalnica.User{

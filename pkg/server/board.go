@@ -263,7 +263,6 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 	s.storage.AddUser(user)
 
 	// povecamo next user Id
-	// TODO zamenjaj s cim bolj robustnim
 	nextUserId++
 
 	// belezenje in replikacija

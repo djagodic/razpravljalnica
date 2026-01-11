@@ -1,4 +1,4 @@
-go run ./cmd/control/mainDelnoDelujocRaft_manual.go \
+go run ./cmd/control/main.go \
   -addr 127.0.0.1:5000 \
   -raft-addr 127.0.0.1:6000 \
   -id cp1 \
@@ -6,11 +6,11 @@ go run ./cmd/control/mainDelnoDelujocRaft_manual.go \
   -bootstrap=true \
   -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
 
-go run ./cmd/control/mainDelnoDelujocRaft_manual.go -addr 127.0.0.1:5000 -raft-addr 127.0.0.1:6000 -id cp1 -data data/cp1 -bootstrap=true -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
+go run ./cmd/control/main.go -addr 127.0.0.1:5000 -raft-addr 127.0.0.1:6000 -id cp1 -data data/cp1 -bootstrap=true -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
 
 
 
-go run ./cmd/control/mainDelnoDelujocRaft_manual.go \
+go run ./cmd/control/main.go \
   -addr 127.0.0.1:5001 \
   -raft-addr 127.0.0.1:6001 \
   -id cp2 \
@@ -18,11 +18,11 @@ go run ./cmd/control/mainDelnoDelujocRaft_manual.go \
   -bootstrap=false \
   -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
 
-go run ./cmd/control/mainDelnoDelujocRaft_manual.go -addr 127.0.0.1:5001 -raft-addr 127.0.0.1:6001 -id cp2 -data data/cp2 -bootstrap=false -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
+go run ./cmd/control/main.go -addr 127.0.0.1:5001 -raft-addr 127.0.0.1:6001 -id cp2 -data data/cp2 -bootstrap=false -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
 
 
 
-go run ./cmd/control/mainDelnoDelujocRaft_manual.go \
+go run ./cmd/control/main.go \
   -addr 127.0.0.1:5002 \
   -raft-addr 127.0.0.1:6002 \
   -id cp3 \
@@ -30,4 +30,4 @@ go run ./cmd/control/mainDelnoDelujocRaft_manual.go \
   -bootstrap=false \
   -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
 
-go run ./cmd/control/mainDelnoDelujocRaft_manual.go -addr 127.0.0.1:5002 -raft-addr 127.0.0.1:6002 -id cp3 -data data/cp3 -bootstrap=false -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"
+go run ./cmd/control/main.go -addr 127.0.0.1:5002 -raft-addr 127.0.0.1:6002 -id cp3 -data data/cp3 -bootstrap=false -peers "cp1=127.0.0.1:6000,cp2=127.0.0.1:6001,cp3=127.0.0.1:6002"

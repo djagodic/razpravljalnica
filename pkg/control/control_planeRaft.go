@@ -15,7 +15,6 @@ import (
 )
 
 // ControlPlaneServer implements api.ControlPlane
-// TODO spremeni nodes v Linked List
 type ControlPlaneServer struct {
 	nadzorna_ravnina.UnimplementedControlPlaneServer
 
@@ -62,7 +61,6 @@ func NewControlPlaneServer(iPnaslov string, raftnaslov string) *ControlPlaneServ
 }
 
 // RegisterNode adds a new node to the chain (called by node at startup)
-// TODO uredi da register node tudi vrne podatke, ki jih mora dati nov node v bazo!
 func (c *ControlPlaneServer) registerNodeInternal(ctx context.Context, req *nadzorna_ravnina.RegisterNodeRequest) (*nadzorna_ravnina.RegisterNodeResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -113,7 +111,6 @@ func (c *ControlPlaneServer) registerNodeInternal(ctx context.Context, req *nadz
 		predzadnji := c.nodes[len(c.nodes)-2]
 		zadnji := c.nodes[len(c.nodes)-1]
 		//posljemu prejsnjemu repu obvestilo o novem repu
-		//TODO poslati to se clientom
 		err := c.sendChanges(predzadnji, zadnji, false)
 		if err != nil {
 			return &nadzorna_ravnina.RegisterNodeResponse{
@@ -184,8 +181,6 @@ func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
 		}
 	}
 
-	//TODO razporedimo njegove subscriberje na druga vozlisca
-	//David: vprasal sem Davorja in je rekel, da ce povezava pade bo pac client sou se enkrat vprasat na control plane kam se mora na novo subscribat
 	log.Printf("deregistered node: %s", nodeID)
 }
 
@@ -367,7 +362,7 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 	ch := s.subToChanges[trenuten.NodeID]
 	s.subsMu.RUnlock()
 
-	//chatko shit, pomoje nepotrebno
+	//pomoje nepotrebno
     if ch == nil {
         return nil
     }

@@ -1,0 +1,2 @@
+go run ./cmd/tuiLight.go
+go run ./cmd/tui.go
