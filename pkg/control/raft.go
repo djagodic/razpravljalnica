@@ -25,10 +25,10 @@ import (
 type RaftControlPlane struct {
 	*ControlPlaneServer
 
-	raft        *raft.Raft
-	raftFSM     *RaftFSM
-	raftGRPC    *grpc.Server
-	raftLis     net.Listener
+	raft     *raft.Raft
+	raftFSM  *RaftFSM
+	raftGRPC *grpc.Server
+	raftLis  net.Listener
 }
 
 type Peer struct {

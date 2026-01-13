@@ -18,16 +18,15 @@ import (
 type ControlPlaneServer struct {
 	nadzorna_ravnina.UnimplementedControlPlaneServer
 
-    address     string // gRPC
-    raftAddress string // Raft transport
+	address     string // gRPC
+	raftAddress string // Raft transport
 
 	// Hooks used when the control plane is wrapped by RaftControlPlane.
-	leaderCheck      func() bool
+	leaderCheck       func() bool
 	applyDeregisterFn func(nodeID string) error
 	applySetNodesFn   func(nodes []*NodeInfo) error
 
-
-	mu           sync.RWMutex
+	mu sync.RWMutex
 	// subToChanges is accessed from Register/Deregister (which hold mu) AND from
 	// SubscribeToChanges stream goroutines. A Go RWMutex is not re-entrant, so
 	// calling sendChanges() (which used to RLock mu) while holding mu.Lock()
@@ -51,7 +50,7 @@ type NodeInfo struct {
 // NewControlPlaneServer creates a new control plane instance
 func NewControlPlaneServer(iPnaslov string, raftnaslov string) *ControlPlaneServer {
 	return &ControlPlaneServer{
-		address:	  iPnaslov,
+		address:      iPnaslov,
 		raftAddress:  raftnaslov,
 		nodes:        []*NodeInfo{},
 		nodeMap:      make(map[string]*NodeInfo),
@@ -66,6 +65,7 @@ func (c *ControlPlaneServer) registerNodeInternal(ctx context.Context, req *nadz
 	defer c.mu.Unlock()
 	for idx, nodeInfo := range c.nodes {
 		//node je ze registriran
+		//ne sprejmemo nodeov z istim imenom v verigo
 		if nodeInfo.NodeID == req.NodeId {
 			log.Printf("node %s already registered, at idx %d", req.NodeId, idx)
 			//doloci head, tail
@@ -129,7 +129,6 @@ func (c *ControlPlaneServer) registerNodeInternal(ctx context.Context, req *nadz
 		IsTail:  isTail,
 	}, nil
 }
-
 
 // DeregisterNode removes a node from the chain
 func (c *ControlPlaneServer) DeregisterNode(nodeID string) {
@@ -200,7 +199,6 @@ func (c *ControlPlaneServer) Heartbeat(ctx context.Context, req *nadzorna_ravnin
 
 	return &emptypb.Empty{}, nil
 }
-
 
 // heartbeatInternalLocked updates liveness for nodeID. Caller must hold c.mu.
 func (c *ControlPlaneServer) heartbeatInternalLocked(nodeID string, hbAt time.Time) {
@@ -363,9 +361,9 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 	s.subsMu.RUnlock()
 
 	//pomoje nepotrebno
-    if ch == nil {
-        return nil
-    }
+	if ch == nil {
+		return nil
+	}
 
 	select {
 	case ch <- change:
@@ -379,20 +377,19 @@ func (s *ControlPlaneServer) sendChanges(trenuten, naslednji *NodeInfo, isNewHea
 // grpc SiuubscribeToChanges
 func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeToChangesRequest, stream nadzorna_ravnina.ControlPlane_SubscribeToChangesServer) error {
 	ch := make(chan *nadzorna_ravnina.Changes, 10)
-	
+
 	// Store subscriber channel under subsMu (NOT mu).
 	s.subsMu.Lock()
 	s.subToChanges[req.NodeId] = ch
 	s.subsMu.Unlock()
 
 	// ko bo vse skupaj crashnilo zbrišem kanal
-    defer func() {
+	defer func() {
 		s.subsMu.Lock()
 		delete(s.subToChanges, req.NodeId)
 		close(ch)
 		s.subsMu.Unlock()
-    }()
-
+	}()
 
 	//stream new messages
 	go func(ch chan *nadzorna_ravnina.Changes) {
@@ -406,7 +403,6 @@ func (s *ControlPlaneServer) SubscribeToChanges(req *nadzorna_ravnina.SubscribeT
 	// block to keep the stream open
 	select {}
 }
-
 
 // setNodesInternal replaces the full control-plane node list.
 // It must be called with the mutex held by the caller OR will lock internally.

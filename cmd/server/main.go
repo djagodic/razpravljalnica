@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	nadzorna_ravnina "github.com/djagodic/razpravljalnica2/pkg/api/nadzornaRavnina"
@@ -108,7 +107,7 @@ func main() {
 		}
 	}
 
-	// 1) Find current leader (for info only)
+	// 1) DEBUG - Find current leader (for info only)
 	_, _, usedLeader, err := dialLeaderControlPlane(peerList)
 	if err != nil {
 		log.Fatalf("No control-plane leader reachable: %v", err)
@@ -141,14 +140,7 @@ func main() {
 	}
 	log.Printf("Node %s listening at %s (head=%v, tail=%v)", *nodeID, *addr, isHead, isTail)
 
-	// Keep the process alive even if CP is temporarily unavailable.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := s.Serve(lis); err != nil {
-			log.Fatalf("serve failed: %v", err)
-		}
-	}()
-	wg.Wait()
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("serve failed: %v", err)
+	}
 }

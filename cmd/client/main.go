@@ -19,28 +19,27 @@ import (
 )
 
 func getClusterState(peers []string) (*nadzorna_ravnina.NodeInfo, *nadzorna_ravnina.NodeInfo, error) {
-    var lastErr error
-    for _, addr := range peers {
-        conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-        if err != nil {
-            lastErr = err
-            continue
-        }
+	var lastErr error
+	for _, addr := range peers {
+		conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-        ctrlClient := nadzorna_ravnina.NewControlPlaneClient(conn)
-        ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-        resp, err := ctrlClient.GetClusterState(ctx, &emptypb.Empty{})
-        cancel()
-        conn.Close()
+		ctrlClient := nadzorna_ravnina.NewControlPlaneClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		resp, err := ctrlClient.GetClusterState(ctx, &emptypb.Empty{})
+		cancel()
+		conn.Close()
 
-        if err == nil {
-            return resp.Head, resp.Tail, nil
-        }
-        lastErr = err
-    }
-    return nil, nil, fmt.Errorf("failed to get cluster state from all peers, last error: %v", lastErr)
+		if err == nil {
+			return resp.Head, resp.Tail, nil
+		}
+		lastErr = err
+	}
+	return nil, nil, fmt.Errorf("failed to get cluster state from all peers, last error: %v", lastErr)
 }
-
 
 func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.ClientConn) {
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -51,80 +50,79 @@ func connectToNode(address string) (razpravljalnica.MessageBoardClient, *grpc.Cl
 }
 
 func startSubscribeWithRetry(userID int64, topicIDs []int64, fromMessageID int64, controlPeers []string) {
-    for {
-        _, _, err := getClusterState(controlPeers)
-        if err != nil {
-            log.Printf("Failed to get cluster state: %v", err)
-            time.Sleep(2 * time.Second)
-            continue
-        }
+	for {
+		_, _, err := getClusterState(controlPeers)
+		if err != nil {
+			log.Printf("Failed to get cluster state: %v", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
 
-        // Ask control plane for subscription node
-        var subNodeAddr string
-        for _, cpAddr := range controlPeers {
-            conn, err := grpc.NewClient(cpAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-            if err != nil {
-                continue
-            }
-            ctrlClient := nadzorna_ravnina.NewControlPlaneClient(conn)
-            ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-            subResp, err := ctrlClient.GetSubscriptionNode(ctx, &nadzorna_ravnina.SubscriptionNodeRequest{
-                UserId:  userID,
-                TopicId: topicIDs,
-            })
-            cancel()
-            conn.Close()
-            if err == nil {
-                subNodeAddr = subResp.Node.Address
-                break
-            }
-        }
+		// Ask control plane for subscription node
+		var subNodeAddr string
+		for _, cpAddr := range controlPeers {
+			conn, err := grpc.NewClient(cpAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				continue
+			}
+			ctrlClient := nadzorna_ravnina.NewControlPlaneClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			subResp, err := ctrlClient.GetSubscriptionNode(ctx, &nadzorna_ravnina.SubscriptionNodeRequest{
+				UserId:  userID,
+				TopicId: topicIDs,
+			})
+			cancel()
+			conn.Close()
+			if err == nil {
+				subNodeAddr = subResp.Node.Address
+				break
+			}
+		}
 
-        if subNodeAddr == "" {
-            log.Printf("No available subscription node, retrying in 2s...")
-            time.Sleep(2 * time.Second)
-            continue
-        }
+		if subNodeAddr == "" {
+			log.Printf("No available subscription node, retrying in 2s...")
+			time.Sleep(2 * time.Second)
+			continue
+		}
 
-        // Connect to subscription node
-        conn, err := grpc.Dial(subNodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-        if err != nil {
-            log.Printf("Failed to connect to node %s: %v", subNodeAddr, err)
-            time.Sleep(2 * time.Second)
-            continue
-        }
-        client := razpravljalnica.NewMessageBoardClient(conn)
+		// Connect to subscription node
+		conn, err := grpc.Dial(subNodeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Printf("Failed to connect to node %s: %v", subNodeAddr, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		client := razpravljalnica.NewMessageBoardClient(conn)
 
-        // Subscribe
-        stream, err := client.SubscribeTopic(context.Background(), &razpravljalnica.SubscribeTopicRequest{
-            UserId:         userID,
-            TopicId:        topicIDs,
-            FromMessageId:  fromMessageID,
-            SubscribeToken: "", // optionally use subResp.SubscribeToken
-        })
-        if err != nil {
-            log.Printf("Subscription failed: %v", err)
-            conn.Close()
-            time.Sleep(2 * time.Second)
-            continue
-        }
+		// Subscribe
+		stream, err := client.SubscribeTopic(context.Background(), &razpravljalnica.SubscribeTopicRequest{
+			UserId:         userID,
+			TopicId:        topicIDs,
+			FromMessageId:  fromMessageID,
+			SubscribeToken: "", // optionally use subResp.SubscribeToken
+		})
+		if err != nil {
+			log.Printf("Subscription failed: %v", err)
+			conn.Close()
+			time.Sleep(2 * time.Second)
+			continue
+		}
 
-        log.Printf("Subscription successful on node %s", subNodeAddr)
+		log.Printf("Subscription successful on node %s", subNodeAddr)
 
-        // Listen for events
-        for {
-            ev, err := stream.Recv()
-            if err != nil {
-                log.Printf("Subscription stream ended, reconnecting: %v", err)
-                conn.Close()
-                break // exit inner loop to retry
-            }
-            fmt.Printf("[EVENT] %v | Topic %d (%s) | User %d: %s\n",
-                ev.Op, ev.Message.TopicId, ev.Message.TopicName, ev.Message.UserId, ev.Message.Text)
-        }
-    }
+		// Listen for events
+		for {
+			ev, err := stream.Recv()
+			if err != nil {
+				log.Printf("Subscription stream ended, reconnecting: %v", err)
+				conn.Close()
+				break // exit inner loop to retry
+			}
+			fmt.Printf("[EVENT] %v | Topic %d (%s) | User %d: %s\n",
+				ev.Op, ev.Message.TopicId, ev.Message.TopicName, ev.Message.UserId, ev.Message.Text)
+		}
+	}
 }
-
 
 func loginUser(headClient razpravljalnica.MessageBoardClient) (*razpravljalnica.User, error) {
 	reader := bufio.NewReader(os.Stdin)
@@ -188,7 +186,7 @@ func main() {
 
 	fmt.Println("Interactive Razpravljalnica CLI")
 	log.Println("Commands:\n createtopic <name>,          post <topic_id> <text>,         update <topic_id> <msg_id> <text>,\n delete <topic_id> <msg_id>,  like <topic_id> <msg_id>,       listtopics,\n listmessages <topic_id>,     subscribe <fromMessageId> <topicId1,topicId2,...>,\n exit")
-	//TODO mogoce naredi "loginpage", da bo en proces vezan na enega userja
+	//naredi "loginpage", da bo en proces vezan na enega userja
 
 	currentUser, err := loginUser(headClient)
 	for err != nil {

@@ -133,19 +133,15 @@ func dialLeaderControlPlane(addrs []string) (*grpc.ClientConn, nadzorna_ravnina.
 func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	// ce pride posebno sporocilo gremo in nastavimo novi head node -> namesto posebne funkcije uporabimo kar tole
 	if address == "NewHead1234" {
-		//s.mu.Lock()
 		s.IsHead = true
-		//s.mu.Unlock()
 		log.Printf("We have set up a new head node, the Head state: %t", s.IsHead)
 		return
 	}
 
 	// povezavo na nil naredimo tako da je address prazen string -> postanemo rep
 	if address == "" {
-		//s.mu.Lock()
 		s.nextNode = nil
 		s.IsTail = true
-		//s.mu.Unlock()
 		log.Printf("Connected to new node: 'nil, status Tail: %t", s.IsTail)
 		return
 	}
@@ -154,7 +150,6 @@ func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to node %s: %v", address, err)
 	}
-	//s.mu.Lock()
 	client := razpravljalnica.NewMessageBoardClient(conn)
 
 	// zamrznemo replikacijo
@@ -179,7 +174,6 @@ func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	s.mu.Unlock()
 
 	log.Printf("[%s] Snapshot installed, replication enabled", s.nodeId)
-	//s.mu.Unlock()
 }
 
 func (s *MessageBoardServer) InstallSnapshot(
@@ -281,10 +275,7 @@ func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnic
 	}
 	s.log.Add(entry)
 
-	// repllikacija + zaklep branja
-	//s.mu.RLock()
 	next := s.nextNode
-	//s.mu.RUnlock()
 
 	if next != nil {
 		_, err := next.CreateUser(ctx, req)
@@ -315,10 +306,7 @@ func (s *MessageBoardServer) CreateTopic(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	// replikacija + zaklep branja
-	//s.mu.RLock()
 	next := s.nextNode
-	//s.mu.RUnlock()
 
 	if next != nil {
 		_, err := next.CreateTopic(ctx, req)
@@ -368,10 +356,7 @@ func (s *MessageBoardServer) PostMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	// replikacija + zaklep branja
-	//s.mu.RLock()
 	next := s.nextNode
-	//s.mu.RUnlock()
 
 	if next != nil {
 		_, err := next.PostMessage(ctx, req)
@@ -450,10 +435,7 @@ func (s *MessageBoardServer) UpdateMessage(ctx context.Context, req *razpravljal
 	}
 	s.log.Add(entry)
 
-	// replikacija + zaklep branja
-	//s.mu.RLock()
 	next := s.nextNode
-	//s.mu.RUnlock()
 
 	if next != nil {
 		_, err := next.UpdateMessage(ctx, req)
@@ -501,10 +483,7 @@ func (s *MessageBoardServer) DeleteMessage(ctx context.Context, req *razpravljal
 	}
 	s.log.Add(entry)
 
-	// replikacija + zaklep branja
-	//s.mu.RLock()
 	next := s.nextNode
-	//s.mu.RUnlock()
 
 	if next != nil {
 		_, err := next.DeleteMessage(ctx, req)
@@ -536,10 +515,7 @@ func (s *MessageBoardServer) LikeMessage(ctx context.Context, req *razpravljalni
 	}
 	s.log.Add(entry)
 
-	// replikacija + zaklep branja
-	//s.mu.RLock()
 	next := s.nextNode
-	//s.mu.RUnlock()
 
 	if next != nil {
 		_, err := next.LikeMessage(ctx, req)

@@ -22,6 +22,7 @@ func main() {
 	dataDir := flag.String("data", "data/cp1", "raft data dir")
 
 	// Only ONE node should use -bootstrap=true.
+	//if ture: ta server zazene raft
 	bootstrap := flag.Bool("bootstrap", false, "bootstrap raft cluster")
 
 	// Initial peer set used ONLY by the bootstrap node.
