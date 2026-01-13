@@ -129,7 +129,6 @@ func dialLeaderControlPlane(addrs []string) (*grpc.ClientConn, nadzorna_ravnina.
 	return nil, nil, "", lastErr
 }
 
-
 // povezi se na naslednji server v verigi
 func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	// ce pride posebno sporocilo gremo in nastavimo novi head node -> namesto posebne funkcije uporabimo kar tole
@@ -231,6 +230,15 @@ func (s *MessageBoardServer) InstallSnapshot(
 
 	log.Printf("[%s] Snapshot installed, nextUserId=%d, nextTopicId=%d, nextMessageId=%d",
 		s.nodeId, nextUserId, nextTopicId, nextMessageId)
+
+	// posljemo spremembe naprej (za primer ce crkne server vmes med potjo ack-ov nazaj)
+	if s.nextNode != nil {
+		ctxNew := context.Background()
+		_, err := s.nextNode.InstallSnapshot(ctxNew, snap)
+		if err != nil {
+			log.Printf("snapshot failed: %v", err)
+		}
+	}
 
 	return &emptypb.Empty{}, nil
 }
