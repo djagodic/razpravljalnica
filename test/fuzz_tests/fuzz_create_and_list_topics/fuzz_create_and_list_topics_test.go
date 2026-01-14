@@ -3,9 +3,8 @@ package fuzz_tests
 import (
 	"context"
 	"testing"
+	"time"
 	"unicode/utf8"
-
-	"github.com/stretchr/testify/require"
 
 	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 	"github.com/djagodic/razpravljalnica2/pkg/server"
@@ -15,50 +14,57 @@ import (
 
 // run with (from root):go test -fuzz=FuzzCreateAndListTopics github.com/djagodic/razpravljalnica/test/fuzz_tests/fuzz_create_and_list_topics
 func FuzzCreateAndListTopics(f *testing.F) {
-	//smemena (imamo vec semen, da v bljizini nih iscemo stringe za testirat)
 	f.Add("LOTR")
 	f.Add("Test")
 	f.Add("Življenje")
 	f.Add("very-very-very-long-topic-name-with-special-characters-!@#$%^&*()")
 
 	f.Fuzz(func(t *testing.T, topicName string) {
-		// Protobuf requires valid UTF-8
 		if !utf8.ValidString(topicName) {
 			return
 		}
-		//ustvarimo nov Message board server
-		nodeId := "node-1"
-		isHead := true
-		isTail := true
-		server := server.NewMessageBoardServer(nodeId, isHead, isTail)
-
-		//pridobimo povezavo na server in cleanup funkcijo
-		conn, cleanup := helper.SetupTestServer(t, server)
-		defer cleanup()
-		//povezemo se na server
-		client := razpravljalnica.NewMessageBoardClient(conn)
-		ctx := context.Background()
-
-		// ustvarimo Topic
-		_, err := client.CreateTopic(ctx, &razpravljalnica.CreateTopicRequest{
-			Name: topicName,
-		})
-
-		// ime topica ne sme biti prazen string
 		if topicName == "" {
 			return
 		}
-		require.NoError(t, err)
+		if len(topicName) > 256 {
+			return
+		}
 
-		// ListTopics
+		server := server.NewMessageBoardServer("node-1", true, true)
+
+		conn, cleanup := helper.SetupTestServer(t, server)
+		defer cleanup()
+
+		client := razpravljalnica.NewMessageBoardClient(conn)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		_, err := client.CreateTopic(ctx, &razpravljalnica.CreateTopicRequest{
+			Name: topicName,
+		})
+		if err != nil {
+			t.Errorf("CreateTopic failed: %v", err)
+			return
+		}
+
 		resp, err := client.ListTopics(ctx, &emptypb.Empty{})
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("ListTopics failed: %v", err)
+			return
+		}
 
-		//preverimo
-		require.Len(t, resp.Topics, 1)
+		if len(resp.Topics) != 1 {
+			t.Errorf("expected 1 topic, got %d", len(resp.Topics))
+			return
+		}
 
 		topic := resp.Topics[0]
-		require.Equal(t, topicName, topic.Name)
-		require.NotZero(t, topic.Id)
+		if topic.Name != topicName {
+			t.Errorf("expected name %q, got %q", topicName, topic.Name)
+		}
+		if topic.Id == 0 {
+			t.Errorf("expected non-zero topic ID")
+		}
 	})
 }

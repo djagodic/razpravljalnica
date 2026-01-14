@@ -187,7 +187,6 @@ func main() {
 	fmt.Println("Interactive Razpravljalnica CLI")
 	log.Println("Commands:\n createtopic <name>,          post <topic_id> <text>,         update <topic_id> <msg_id> <text>,\n delete <topic_id> <msg_id>,  like <topic_id> <msg_id>,       listtopics,\n listmessages <topic_id>,     subscribe <fromMessageId> <topicId1,topicId2,...>,\n exit")
 	//naredi "loginpage", da bo en proces vezan na enega userja
-
 	currentUser, err := loginUser(headClient)
 	for err != nil {
 		currentUser, err = loginUser(headClient)

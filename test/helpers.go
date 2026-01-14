@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	razpravljalnica "github.com/djagodic/razpravljalnica2/pkg/api/razpravljalnica"
 	"github.com/stretchr/testify/require"
@@ -17,21 +18,17 @@ const bufSize = 1024 * 1024
 
 // vrne povezavo na server in funkcijo za clean up
 func SetupTestServer(t *testing.T, srv razpravljalnica.MessageBoardServer) (*grpc.ClientConn, func()) {
-	//z bufconn ustvarimo streznik ki bo s clientom povezan preko memory-ja ne preko porta -> se izognemo network tezavam
 	lis := bufconn.Listen(bufSize)
 
 	s := grpc.NewServer()
 	razpravljalnica.RegisterMessageBoardServer(s, srv)
 
-	//zazenemo server v gorutini
 	go func() {
-		if err := s.Serve(lis); err != nil {
-			t.Fatalf("server exited: %v", err)
-		}
+		_ = s.Serve(lis) // never call t.Fatal here
 	}()
 
-	//ustvarimo povezavo clienta, povezanega na ta server
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+
 	conn, err := grpc.DialContext(
 		ctx,
 		"bufnet",
@@ -39,13 +36,15 @@ func SetupTestServer(t *testing.T, srv razpravljalnica.MessageBoardServer) (*grp
 			return lis.Dial()
 		}),
 		grpc.WithInsecure(),
+		//grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 
-	//funkcija za cleanup
 	cleanup := func() {
 		conn.Close()
-		s.Stop()
+		s.GracefulStop()
+		lis.Close()
+		cancel()
 	}
 
 	return conn, cleanup
