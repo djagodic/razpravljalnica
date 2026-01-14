@@ -28,6 +28,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	MessageBoard_GetLastMsgId_FullMethodName    = "/razpravljalnica.MessageBoard/GetLastMsgId"
 	MessageBoard_CreateUser_FullMethodName      = "/razpravljalnica.MessageBoard/CreateUser"
 	MessageBoard_CreateTopic_FullMethodName     = "/razpravljalnica.MessageBoard/CreateTopic"
 	MessageBoard_PostMessage_FullMethodName     = "/razpravljalnica.MessageBoard/PostMessage"
@@ -49,6 +50,8 @@ const (
 // Data plane
 // //////////////////////////////////////////////////////////////////////////////
 type MessageBoardClient interface {
+	// for replication - get most recent msgID
+	GetLastMsgId(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*LastMsgID, error)
 	// Creates a new user and assigns it an id
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*User, error)
 	// Creates a new topic to which users can post messages
@@ -79,6 +82,16 @@ type messageBoardClient struct {
 
 func NewMessageBoardClient(cc grpc.ClientConnInterface) MessageBoardClient {
 	return &messageBoardClient{cc}
+}
+
+func (c *messageBoardClient) GetLastMsgId(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*LastMsgID, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LastMsgID)
+	err := c.cc.Invoke(ctx, MessageBoard_GetLastMsgId_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *messageBoardClient) CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*User, error) {
@@ -208,6 +221,8 @@ func (c *messageBoardClient) InstallSnapshot(ctx context.Context, in *StorageSna
 // Data plane
 // //////////////////////////////////////////////////////////////////////////////
 type MessageBoardServer interface {
+	// for replication - get most recent msgID
+	GetLastMsgId(context.Context, *emptypb.Empty) (*LastMsgID, error)
 	// Creates a new user and assigns it an id
 	CreateUser(context.Context, *CreateUserRequest) (*User, error)
 	// Creates a new topic to which users can post messages
@@ -240,6 +255,9 @@ type MessageBoardServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMessageBoardServer struct{}
 
+func (UnimplementedMessageBoardServer) GetLastMsgId(context.Context, *emptypb.Empty) (*LastMsgID, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLastMsgId not implemented")
+}
 func (UnimplementedMessageBoardServer) CreateUser(context.Context, *CreateUserRequest) (*User, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateUser not implemented")
 }
@@ -292,6 +310,24 @@ func RegisterMessageBoardServer(s grpc.ServiceRegistrar, srv MessageBoardServer)
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&MessageBoard_ServiceDesc, srv)
+}
+
+func _MessageBoard_GetLastMsgId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessageBoardServer).GetLastMsgId(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessageBoard_GetLastMsgId_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessageBoardServer).GetLastMsgId(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _MessageBoard_CreateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -492,6 +528,10 @@ var MessageBoard_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "razpravljalnica.MessageBoard",
 	HandlerType: (*MessageBoardServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetLastMsgId",
+			Handler:    _MessageBoard_GetLastMsgId_Handler,
+		},
 		{
 			MethodName: "CreateUser",
 			Handler:    _MessageBoard_CreateUser_Handler,

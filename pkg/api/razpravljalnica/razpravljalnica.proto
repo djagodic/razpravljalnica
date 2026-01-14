@@ -59,12 +59,20 @@ message NodeInfo {
   string address = 2;
 }
 
+message LastMsgID {
+  int64 last_msg_id = 1;
+  int64 last_usr_id = 2;
+  int64 last_topic_id = 3;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Data plane
 ////////////////////////////////////////////////////////////////////////////////
 service  MessageBoard{
   // Writes (only to head)
   
+  //for replication - get most recent msgID
+  rpc GetLastMsgId(google.protobuf.Empty) returns (LastMsgID);
 
   // Creates a new user and assigns it an id
   rpc CreateUser(CreateUserRequest) returns (User);

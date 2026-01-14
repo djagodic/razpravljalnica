@@ -1,2 +1,2 @@
-go run ./cmd/tuiLight.go
-go run ./cmd/tui.go
+go run ./cmd/UI/tuiLight.go
+go run ./cmd/UI/tui.go

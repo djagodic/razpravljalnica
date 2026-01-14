@@ -158,6 +158,12 @@ func (s *MessageBoardServer) ConnectToNextNode(address string) {
 	s.IsTail = false
 	s.mu.Unlock()
 
+	//vprasamo kje je zadnji message od naslednjega
+	_, err1 := client.GetLastMsgId(context.Background(), &emptypb.Empty{})
+	if err1 != nil {
+		log.Printf("GetLastMesgId failed: %v", err)
+		return
+	}
 	// zgradimo snapshot
 	snap := s.storage.BuildSnapshot()
 
@@ -237,6 +243,14 @@ func (s *MessageBoardServer) InstallSnapshot(
 	return &emptypb.Empty{}, nil
 }
 
+func (s *NodeStorage) BuildSnapshotNewer(last *razpravljalnica.LastMsgID) *razpravljalnica.StorageSnapshot {
+	return &razpravljalnica.StorageSnapshot{
+		Users:    s.ListUsersNewer(last.LastUsrId),
+		Topics:   s.ListTopicsNewer(last.LastTopicId),
+		Messages: s.ListMessagesNewer(last.LastMsgId),
+	}
+}
+
 func (s *NodeStorage) BuildSnapshot() *razpravljalnica.StorageSnapshot {
 	return &razpravljalnica.StorageSnapshot{
 		Users:    s.ListUsers(),
@@ -255,6 +269,19 @@ func (s *MessageBoardServer) GetUser(ctx context.Context, req *razpravljalnica.G
 	}
 
 	return nil, errors.New("user does not exist")
+}
+
+func (s *MessageBoardServer) GetLastMsgId(ctx context.Context) *razpravljalnica.LastMsgID {
+	s.mu.RLock()
+	lastMsgId := nextMessageId - 1
+	lastUsrId := nextUserId - 1
+	lastTopicId := nextTopicId - 1
+	defer s.mu.Unlock()
+	return &razpravljalnica.LastMsgID{
+		LastMsgId:   lastMsgId,
+		LastUsrId:   lastUsrId,
+		LastTopicId: lastTopicId,
+	}
 }
 
 func (s *MessageBoardServer) CreateUser(ctx context.Context, req *razpravljalnica.CreateUserRequest) (*razpravljalnica.User, error) {

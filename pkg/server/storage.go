@@ -88,6 +88,20 @@ func (s *NodeStorage) ListTopics() []*razpravljalnica.Topic {
 	return topics
 }
 
+func (s *NodeStorage) ListTopicsNewer(id int64) []*razpravljalnica.Topic {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	topics := make([]*razpravljalnica.Topic, 0)
+	for _, topic := range s.topics {
+		if topic.Id > id {
+			topics = append(topics, topic)
+		}
+	}
+
+	return topics
+}
+
 // AddMessage doda sporocilo
 func (s *NodeStorage) AddMessage(c *razpravljalnica.Message) error {
 	s.mu.Lock()
@@ -234,6 +248,21 @@ func (s *NodeStorage) ListAllMessages() []*razpravljalnica.Message {
 	return res
 }
 
+func (s *NodeStorage) ListMessagesNewer(id int64) []*razpravljalnica.Message {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	res := make([]*razpravljalnica.Message, 0)
+	for _, topicMsgs := range s.comments {
+		for _, m := range topicMsgs {
+			if m.Id > id {
+				res = append(res, m)
+			}
+		}
+	}
+	return res
+}
+
 func (s *NodeStorage) ListUsers() []*razpravljalnica.User {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -241,6 +270,19 @@ func (s *NodeStorage) ListUsers() []*razpravljalnica.User {
 	res := make([]*razpravljalnica.User, 0, len(s.users))
 	for _, u := range s.users {
 		res = append(res, u)
+	}
+	return res
+}
+
+func (s *NodeStorage) ListUsersNewer(id int64) []*razpravljalnica.User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	res := make([]*razpravljalnica.User, 0)
+	for _, u := range s.users {
+		if u.Id > id {
+			res = append(res, u)
+		}
 	}
 	return res
 }
